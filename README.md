@@ -18,10 +18,21 @@ ReadMD 计划解决手机端 Markdown 文件阅读、编辑和导出不方便的
 
 - [需求分析文档](docs/requirements-analysis.md)
 - [阶段 01 开发记录：Android 工程骨架](docs/development/stage-01-android-foundation.md)
+- [阶段 02 开发记录：本地备忘录 MVP 闭环](docs/development/stage-02-local-memo-mvp.md)
 
 ## 当前状态
 
-项目已完成 Android + Jetpack Compose 工程骨架，当前首屏为占位 UI，已支持 Debug 构建。
+项目已完成 Android + Jetpack Compose 工程骨架，并实现本地 Markdown 备忘录 MVP 闭环：
+
+- 打开本地 Markdown/Text 文件
+- 阅读基础 Markdown 预览
+- 编辑、预览、保存
+- 新建备忘录
+- 另存为 Markdown
+- 导出 Markdown
+- 最近打开文件
+- 文内搜索匹配统计
+- 大字模式和字号调整
 
 已验证：
 
@@ -29,4 +40,4 @@ ReadMD 计划解决手机端 Markdown 文件阅读、编辑和导出不方便的
 .\gradlew.bat :app:assembleDebug
 ```
 
-下一阶段将实现系统文件选择器、Markdown 文件读取、编辑、保存和 Markdown 导出闭环。
+下一阶段将继续打磨自动保存草稿、设置持久化、Markdown 渲染增强和测试。
