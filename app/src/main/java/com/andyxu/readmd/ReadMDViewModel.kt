@@ -6,7 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.andyxu.readmd.data.DocumentRepository
 import com.andyxu.readmd.data.DocumentState
-import com.andyxu.readmd.data.ReaderSettings
+import com.andyxu.readmd.data.DraftSnapshot
 import com.andyxu.readmd.data.SaveTarget
 import com.andyxu.readmd.file.PickedDocument
 import kotlinx.coroutines.Dispatchers
@@ -18,12 +18,35 @@ import kotlinx.coroutines.withContext
 
 class ReadMDViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = DocumentRepository(application)
+    private val restoredDraft = repository.draftSnapshot()
     private val _state = MutableStateFlow(
-        DocumentState(
-            recentFiles = repository.recentFiles(),
-        ),
+        initialState(),
     )
     val state: StateFlow<DocumentState> = _state
+
+    private fun initialState(): DocumentState {
+        val settings = repository.readerSettings()
+        return if (restoredDraft != null && restoredDraft.draftContent.isNotBlank()) {
+            DocumentState(
+                currentUri = restoredDraft.currentUri?.let(Uri::parse),
+                displayName = restoredDraft.displayName,
+                content = restoredDraft.content,
+                draftContent = restoredDraft.draftContent,
+                isEditing = true,
+                hasUnsavedChanges = restoredDraft.draftContent != restoredDraft.content,
+                draftUpdatedAt = restoredDraft.updatedAt,
+                canWriteCurrentFile = restoredDraft.canWriteCurrentFile,
+                settings = settings,
+                recentFiles = repository.recentFiles(),
+                message = "已恢复上次未保存草稿",
+            )
+        } else {
+            DocumentState(
+                settings = settings,
+                recentFiles = repository.recentFiles(),
+            )
+        }
+    }
 
     fun openPickedDocument(document: PickedDocument) {
         repository.persistUriPermission(document.uri, document.grantFlags)
@@ -45,10 +68,12 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 previewContent = null,
                 isEditing = true,
                 hasUnsavedChanges = true,
+                draftUpdatedAt = System.currentTimeMillis(),
                 canWriteCurrentFile = false,
                 message = "已创建新备忘录，请保存到文件",
             )
         }
+        saveCurrentDraft()
     }
 
     fun requestNewFileSave() {
@@ -102,8 +127,10 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 draftContent = content,
                 previewContent = null,
                 hasUnsavedChanges = content != it.content,
+                draftUpdatedAt = if (content != it.content) System.currentTimeMillis() else it.draftUpdatedAt,
             )
         }
+        saveCurrentDraft()
     }
 
     fun enterEditMode() {
@@ -123,9 +150,11 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 previewContent = it.draftContent,
                 isEditing = false,
                 hasUnsavedChanges = true,
+                draftUpdatedAt = System.currentTimeMillis(),
                 message = "正在预览未保存内容",
             )
         }
+        saveCurrentDraft()
     }
 
     fun discardChanges() {
@@ -135,28 +164,44 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 previewContent = null,
                 isEditing = false,
                 hasUnsavedChanges = false,
+                draftUpdatedAt = null,
                 message = "已放弃未保存修改",
             )
         }
+        repository.clearDraft()
     }
 
     fun toggleElderMode() {
         _state.update {
-            it.copy(settings = it.settings.copy(elderMode = !it.settings.elderMode))
+            it.copyAndSaveSettings(it.settings.copy(elderMode = !it.settings.elderMode))
         }
     }
 
     fun increaseFont() {
         _state.update {
             val settings = it.settings
-            it.copy(settings = settings.copy(fontScale = (settings.fontScale + 0.1f).coerceAtMost(1.8f)))
+            it.copyAndSaveSettings(settings.copy(fontScale = (settings.fontScale + 0.1f).coerceAtMost(1.8f)))
         }
     }
 
     fun decreaseFont() {
         _state.update {
             val settings = it.settings
-            it.copy(settings = settings.copy(fontScale = (settings.fontScale - 0.1f).coerceAtLeast(0.85f)))
+            it.copyAndSaveSettings(settings.copy(fontScale = (settings.fontScale - 0.1f).coerceAtLeast(0.85f)))
+        }
+    }
+
+    fun increaseLineHeight() {
+        _state.update {
+            val settings = it.settings
+            it.copyAndSaveSettings(settings.copy(lineHeightScale = (settings.lineHeightScale + 0.1f).coerceAtMost(1.8f)))
+        }
+    }
+
+    fun decreaseLineHeight() {
+        _state.update {
+            val settings = it.settings
+            it.copyAndSaveSettings(settings.copy(lineHeightScale = (settings.lineHeightScale - 0.1f).coerceAtLeast(0.85f)))
         }
     }
 
@@ -195,12 +240,14 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                         previewContent = null,
                         isEditing = false,
                         hasUnsavedChanges = false,
+                        draftUpdatedAt = null,
                         isLoading = false,
                         canWriteCurrentFile = canWrite,
                         recentFiles = repository.recentFiles(),
                         message = "已打开 $name",
                     )
                 }
+                repository.clearDraft()
             }.onFailure { error ->
                 _state.update {
                     it.copy(
@@ -242,6 +289,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                             previewContent = null,
                             isEditing = false,
                             hasUnsavedChanges = false,
+                            draftUpdatedAt = null,
                             canWriteCurrentFile = canWrite,
                             isLoading = false,
                             recentFiles = repository.recentFiles(),
@@ -253,6 +301,9 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                             message = successMessage,
                         )
                     }
+                }
+                if (switchCurrentFile) {
+                    repository.clearDraft()
                 }
             }.onFailure { error ->
                 _state.update {
@@ -272,5 +323,25 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             "$name.md"
         }
+    }
+
+    private fun DocumentState.copyAndSaveSettings(settings: com.andyxu.readmd.data.ReaderSettings): DocumentState {
+        repository.saveReaderSettings(settings)
+        return copy(settings = settings)
+    }
+
+    private fun saveCurrentDraft() {
+        val current = _state.value
+        if (!current.hasUnsavedChanges) return
+        repository.saveDraft(
+            DraftSnapshot(
+                currentUri = current.currentUri?.toString(),
+                displayName = current.displayName,
+                content = current.content,
+                draftContent = current.draftContent,
+                canWriteCurrentFile = current.canWriteCurrentFile,
+                updatedAt = current.draftUpdatedAt ?: System.currentTimeMillis(),
+            ),
+        )
     }
 }

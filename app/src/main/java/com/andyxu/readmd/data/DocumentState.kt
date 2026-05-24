@@ -22,6 +22,15 @@ data class ReaderSettings(
     val lineHeightScale: Float = 1f,
 )
 
+data class DraftSnapshot(
+    val currentUri: String?,
+    val displayName: String,
+    val content: String,
+    val draftContent: String,
+    val canWriteCurrentFile: Boolean,
+    val updatedAt: Long,
+)
+
 data class DocumentState(
     val currentUri: Uri? = null,
     val displayName: String = "未命名.md",
@@ -30,6 +39,7 @@ data class DocumentState(
     val previewContent: String? = null,
     val isEditing: Boolean = false,
     val hasUnsavedChanges: Boolean = false,
+    val draftUpdatedAt: Long? = null,
     val isLoading: Boolean = false,
     val canWriteCurrentFile: Boolean = false,
     val message: String? = null,

@@ -160,6 +160,8 @@ fun ReadMDApp(
         onToggleElderMode = viewModel::toggleElderMode,
         onIncreaseFont = viewModel::increaseFont,
         onDecreaseFont = viewModel::decreaseFont,
+        onIncreaseLineHeight = viewModel::increaseLineHeight,
+        onDecreaseLineHeight = viewModel::decreaseLineHeight,
         onSearchChange = viewModel::updateSearch,
         onRecentFileClick = viewModel::openRecentFile,
         onClearRecentFiles = viewModel::clearRecentFiles,
@@ -189,6 +191,8 @@ private fun ReadMDScreen(
     onToggleElderMode: () -> Unit,
     onIncreaseFont: () -> Unit,
     onDecreaseFont: () -> Unit,
+    onIncreaseLineHeight: () -> Unit,
+    onDecreaseLineHeight: () -> Unit,
     onSearchChange: (String) -> Unit,
     onRecentFileClick: (String) -> Unit,
     onClearRecentFiles: () -> Unit,
@@ -245,6 +249,8 @@ private fun ReadMDScreen(
                     onDiscard = onDiscard,
                     onIncreaseFont = onIncreaseFont,
                     onDecreaseFont = onDecreaseFont,
+                    onIncreaseLineHeight = onIncreaseLineHeight,
+                    onDecreaseLineHeight = onDecreaseLineHeight,
                 )
             }
 
@@ -304,6 +310,8 @@ private fun ActionPanel(
     onDiscard: () -> Unit,
     onIncreaseFont: () -> Unit,
     onDecreaseFont: () -> Unit,
+    onIncreaseLineHeight: () -> Unit,
+    onDecreaseLineHeight: () -> Unit,
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -351,10 +359,15 @@ private fun ActionPanel(
             ) {
                 AssistChip(onClick = onDecreaseFont, label = { Text("字小") })
                 AssistChip(onClick = onIncreaseFont, label = { Text("字大") })
+                AssistChip(onClick = onDecreaseLineHeight, label = { Text("行窄") })
+                AssistChip(onClick = onIncreaseLineHeight, label = { Text("行宽") })
                 AssistChip(
                     onClick = {},
                     label = { Text(if (state.canWriteCurrentFile) "可写文件" else "需另存") },
                 )
+                if (state.hasUnsavedChanges && state.draftUpdatedAt != null) {
+                    AssistChip(onClick = {}, label = { Text("草稿已保护") })
+                }
                 if (state.isLoading) {
                     AssistChip(onClick = {}, label = { Text("处理中") })
                 }
@@ -534,6 +547,8 @@ private fun ReadMDScreenPreview() {
             onToggleElderMode = {},
             onIncreaseFont = {},
             onDecreaseFont = {},
+            onIncreaseLineHeight = {},
+            onDecreaseLineHeight = {},
             onSearchChange = {},
             onRecentFileClick = {},
             onClearRecentFiles = {},

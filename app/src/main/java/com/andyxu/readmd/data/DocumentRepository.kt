@@ -89,6 +89,53 @@ class DocumentRepository(private val context: Context) {
         prefs.edit().remove(KEY_RECENT_FILES).apply()
     }
 
+    fun readerSettings(): ReaderSettings {
+        return ReaderSettings(
+            elderMode = prefs.getBoolean(KEY_ELDER_MODE, false),
+            fontScale = prefs.getFloat(KEY_FONT_SCALE, 1f),
+            lineHeightScale = prefs.getFloat(KEY_LINE_HEIGHT_SCALE, 1f),
+        )
+    }
+
+    fun saveReaderSettings(settings: ReaderSettings) {
+        prefs.edit()
+            .putBoolean(KEY_ELDER_MODE, settings.elderMode)
+            .putFloat(KEY_FONT_SCALE, settings.fontScale)
+            .putFloat(KEY_LINE_HEIGHT_SCALE, settings.lineHeightScale)
+            .apply()
+    }
+
+    fun saveDraft(snapshot: DraftSnapshot) {
+        val value = JSONObject()
+            .put("currentUri", snapshot.currentUri)
+            .put("displayName", snapshot.displayName)
+            .put("content", snapshot.content)
+            .put("draftContent", snapshot.draftContent)
+            .put("canWriteCurrentFile", snapshot.canWriteCurrentFile)
+            .put("updatedAt", snapshot.updatedAt)
+            .toString()
+        prefs.edit().putString(KEY_DRAFT, value).apply()
+    }
+
+    fun draftSnapshot(): DraftSnapshot? {
+        val raw = prefs.getString(KEY_DRAFT, null) ?: return null
+        return runCatching {
+            val value = JSONObject(raw)
+            DraftSnapshot(
+                currentUri = value.optString("currentUri").takeUnless { it.isBlank() || it == "null" },
+                displayName = value.optString("displayName", "自动恢复草稿.md"),
+                content = value.optString("content"),
+                draftContent = value.optString("draftContent"),
+                canWriteCurrentFile = value.optBoolean("canWriteCurrentFile"),
+                updatedAt = value.optLong("updatedAt"),
+            )
+        }.getOrNull()
+    }
+
+    fun clearDraft() {
+        prefs.edit().remove(KEY_DRAFT).apply()
+    }
+
     private fun saveRecentFiles(files: List<RecentFile>) {
         val array = JSONArray()
         files.forEach { file ->
@@ -120,6 +167,9 @@ class DocumentRepository(private val context: Context) {
 
     private companion object {
         const val KEY_RECENT_FILES = "recent_files"
+        const val KEY_ELDER_MODE = "elder_mode"
+        const val KEY_FONT_SCALE = "font_scale"
+        const val KEY_LINE_HEIGHT_SCALE = "line_height_scale"
+        const val KEY_DRAFT = "draft"
     }
 }
-

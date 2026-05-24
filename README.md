@@ -17,8 +17,11 @@ ReadMD 计划解决手机端 Markdown 文件阅读、编辑和导出不方便的
 ## 文档
 
 - [需求分析文档](docs/requirements-analysis.md)
+- [使用说明](docs/user-guide.md)
+- [下载安装说明](docs/installation.md)
 - [阶段 01 开发记录：Android 工程骨架](docs/development/stage-01-android-foundation.md)
 - [阶段 02 开发记录：本地备忘录 MVP 闭环](docs/development/stage-02-local-memo-mvp.md)
+- [阶段 03 开发记录：稳定性与文档](docs/development/stage-03-stability-docs.md)
 
 ## 当前状态
 
@@ -33,11 +36,19 @@ ReadMD 计划解决手机端 Markdown 文件阅读、编辑和导出不方便的
 - 最近打开文件
 - 文内搜索匹配统计
 - 大字模式和字号调整
+- 设置持久化
+- 自动草稿保护
 
 已验证：
 
 ```powershell
-.\gradlew.bat :app:assembleDebug
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug
 ```
 
-下一阶段将继续打磨自动保存草稿、设置持久化、Markdown 渲染增强和测试。
+Debug APK 构建产物：
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+下一阶段将继续打磨 Markdown 渲染增强、真机测试问题修复、Release APK 和发布流程。
