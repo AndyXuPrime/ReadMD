@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,6 +29,18 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+private sealed interface MarkdownBlock {
+    data object Blank : MarkdownBlock
+    data object Divider : MarkdownBlock
+    data class Heading(val level: Int, val text: String) : MarkdownBlock
+    data class Quote(val text: String) : MarkdownBlock
+    data class Task(val checked: Boolean, val text: String) : MarkdownBlock
+    data class ListItem(val text: String) : MarkdownBlock
+    data class Table(val cells: List<String>) : MarkdownBlock
+    data class CodeBlock(val text: String) : MarkdownBlock
+    data class Paragraph(val text: String) : MarkdownBlock
+}
+
 @Composable
 fun MarkdownPreview(
     content: String,
@@ -35,51 +48,86 @@ fun MarkdownPreview(
     lineHeightScale: Float,
     modifier: Modifier = Modifier,
 ) {
-    val lines = content.lines()
+    val blocks = remember(content) {
+        runCatching { parseMarkdownBlocks(content) }
+            .getOrElse { listOf(MarkdownBlock.Paragraph(content)) }
+    }
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        var index = 0
-        while (index < lines.size) {
-            val line = lines[index]
-            if (line.trim().startsWith("```")) {
+        blocks.forEach { block ->
+            MarkdownBlockView(block, fontScale, lineHeightScale)
+        }
+    }
+}
+
+private fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
+    val lines = content.lines()
+    val blocks = mutableListOf<MarkdownBlock>()
+    var index = 0
+    while (index < lines.size) {
+        val line = lines[index]
+        val trimmed = line.trim()
+        when {
+            trimmed.isBlank() -> blocks += MarkdownBlock.Blank
+            trimmed.startsWith("```") -> {
                 val codeLines = mutableListOf<String>()
                 index += 1
                 while (index < lines.size && !lines[index].trim().startsWith("```")) {
                     codeLines += lines[index]
                     index += 1
                 }
-                CodeBlock(codeLines.joinToString("\n"), fontScale)
-            } else {
-                MarkdownLine(
-                    line = line,
-                    fontScale = fontScale,
-                    lineHeightScale = lineHeightScale,
+                blocks += MarkdownBlock.CodeBlock(codeLines.joinToString("\n"))
+            }
+            trimmed.matches(Regex("^[-*_]{3,}$")) -> blocks += MarkdownBlock.Divider
+            trimmed.startsWith("#") -> {
+                val level = line.takeWhile { it == '#' }.length.coerceIn(1, 6)
+                blocks += MarkdownBlock.Heading(level = level, text = line.drop(level).trim())
+            }
+            trimmed.startsWith(">") -> blocks += MarkdownBlock.Quote(trimmed.removePrefix(">").trimStart())
+            trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]", ignoreCase = true) -> {
+                blocks += MarkdownBlock.Task(
+                    checked = trimmed.startsWith("- [x]", ignoreCase = true),
+                    text = trimmed.drop(5).trim(),
                 )
             }
-            index += 1
+            trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.matches(Regex("^\\d+\\.\\s+.+")) -> {
+                blocks += MarkdownBlock.ListItem(
+                    trimmed
+                        .removePrefix("- ")
+                        .removePrefix("* ")
+                        .replace(Regex("^\\d+\\.\\s+"), "")
+                        .trim(),
+                )
+            }
+            trimmed.contains("|") && trimmed.count { it == '|' } >= 2 -> {
+                blocks += MarkdownBlock.Table(trimmed.trim('|').split('|').map { it.trim() })
+            }
+            else -> blocks += MarkdownBlock.Paragraph(trimmed)
         }
+        index += 1
     }
+    return blocks
 }
 
 @Composable
-private fun MarkdownLine(
-    line: String,
+private fun MarkdownBlockView(
+    block: MarkdownBlock,
     fontScale: Float,
     lineHeightScale: Float,
 ) {
-    val trimmed = line.trim()
-    when {
-        trimmed.isBlank() -> Box(modifier = Modifier.padding(vertical = 3.dp))
-        trimmed.matches(Regex("^[-*_]{3,}$")) -> HorizontalDivider()
-        trimmed.startsWith("#") -> HeadingLine(trimmed, fontScale, lineHeightScale)
-        trimmed.startsWith(">") -> QuoteLine(trimmed.removePrefix(">").trimStart(), fontScale, lineHeightScale)
-        trimmed.startsWith("- [ ]") || trimmed.startsWith("- [x]", ignoreCase = true) -> TaskLine(trimmed, fontScale, lineHeightScale)
-        trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.matches(Regex("^\\d+\\.\\s+.+")) -> ListLine(trimmed, fontScale, lineHeightScale)
-        trimmed.contains("|") && trimmed.count { it == '|' } >= 2 -> TableLikeLine(trimmed, fontScale)
-        else -> StyledText(
-            raw = trimmed,
+    when (block) {
+        MarkdownBlock.Blank -> Box(modifier = Modifier.padding(vertical = 3.dp))
+        MarkdownBlock.Divider -> HorizontalDivider()
+        is MarkdownBlock.Heading -> HeadingLine(block.level, block.text, fontScale, lineHeightScale)
+        is MarkdownBlock.Quote -> QuoteLine(block.text, fontScale, lineHeightScale)
+        is MarkdownBlock.Task -> TaskLine(block.checked, block.text, fontScale, lineHeightScale)
+        is MarkdownBlock.ListItem -> ListLine(block.text, fontScale, lineHeightScale)
+        is MarkdownBlock.Table -> TableLikeLine(block.cells, fontScale)
+        is MarkdownBlock.CodeBlock -> CodeBlock(block.text, fontScale)
+        is MarkdownBlock.Paragraph -> StyledText(
+            raw = block.text,
             fontSize = 16.sp * fontScale,
             lineHeight = 24.sp * fontScale * lineHeightScale,
         )
@@ -88,12 +136,11 @@ private fun MarkdownLine(
 
 @Composable
 private fun HeadingLine(
-    line: String,
+    level: Int,
+    text: String,
     fontScale: Float,
     lineHeightScale: Float,
 ) {
-    val level = line.takeWhile { it == '#' }.length.coerceIn(1, 6)
-    val text = line.drop(level).trim()
     val size = when (level) {
         1 -> 30.sp
         2 -> 26.sp
@@ -137,12 +184,11 @@ private fun QuoteLine(
 
 @Composable
 private fun TaskLine(
-    line: String,
+    checked: Boolean,
+    text: String,
     fontScale: Float,
     lineHeightScale: Float,
 ) {
-    val checked = line.startsWith("- [x]", ignoreCase = true)
-    val text = line.drop(5).trim()
     Row(verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = checked, onCheckedChange = null)
         StyledText(
@@ -156,15 +202,10 @@ private fun TaskLine(
 
 @Composable
 private fun ListLine(
-    line: String,
+    text: String,
     fontScale: Float,
     lineHeightScale: Float,
 ) {
-    val text = line
-        .removePrefix("- ")
-        .removePrefix("* ")
-        .replace(Regex("^\\d+\\.\\s+"), "")
-        .trim()
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = "•",
@@ -181,10 +222,9 @@ private fun ListLine(
 
 @Composable
 private fun TableLikeLine(
-    line: String,
+    cells: List<String>,
     fontScale: Float,
 ) {
-    val cells = line.trim('|').split('|').map { it.trim() }
     Row(
         modifier = Modifier
             .horizontalScroll(rememberScrollState())
@@ -262,4 +302,3 @@ fun countSearchMatches(content: String, query: String): Int {
     if (query.isBlank()) return 0
     return Regex(Regex.escape(query), RegexOption.IGNORE_CASE).findAll(content).count()
 }
-

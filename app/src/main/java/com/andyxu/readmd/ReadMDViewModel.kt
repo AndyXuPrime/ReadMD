@@ -279,7 +279,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                         content = document.content,
                         draftContent = document.content,
                         previewContent = null,
-                        isEditing = false,
+                        isEditing = true,
                         hasUnsavedChanges = false,
                         draftUpdatedAt = null,
                         isLoading = false,
