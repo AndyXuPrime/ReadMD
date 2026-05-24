@@ -44,7 +44,11 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 draftContent = repository.sanitizeText(it.draftContent),
             )
         }
-        return if (restoredContent != null && restoredContent.draftContent.isNotBlank()) {
+        val shouldRestoreDraft = restoredContent != null &&
+            restoredContent.draftContent.isNotBlank() &&
+            restoredContent.draftContent != restoredContent.content
+
+        return if (shouldRestoreDraft) {
             DocumentState(
                 currentUri = restoredContent.currentUri?.let(Uri::parse),
                 displayName = restoredContent.displayName,
@@ -59,6 +63,9 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 message = "已恢复上次未保存草稿",
             )
         } else {
+            if (restoredContent != null) {
+                repository.clearDraft()
+            }
             DocumentState(
                 settings = settings,
                 recentFiles = repository.recentFiles(),
@@ -91,7 +98,6 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 message = "已创建新备忘录，请保存到文件",
             )
         }
-        saveCurrentDraft()
     }
 
     fun requestNewFileSave() {
@@ -341,7 +347,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                             content = savedContent,
                             draftContent = savedContent,
                             previewContent = null,
-                            isEditing = false,
+                            isEditing = true,
                             hasUnsavedChanges = false,
                             draftUpdatedAt = null,
                             canWriteCurrentFile = canWrite,

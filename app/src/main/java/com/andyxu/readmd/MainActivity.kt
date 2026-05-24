@@ -317,78 +317,77 @@ private fun ReadMDDocumentScreen(
             )
         },
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(spacing),
         ) {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
-                    ActionButton(text = "保存", fontScale = textScale, elderMode = elderMode, modifier = Modifier.weight(1f), onClick = onSave)
-                    ActionButton(text = "另存", fontScale = textScale, elderMode = elderMode, modifier = Modifier.weight(1f), onClick = onSaveAs)
-                    ActionButton(text = "导出", fontScale = textScale, elderMode = elderMode, modifier = Modifier.weight(1f), onClick = onExport)
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                ActionButton(text = "保存", fontScale = textScale, elderMode = elderMode, modifier = Modifier.weight(1f), onClick = onSave)
+                ActionButton(text = "另存", fontScale = textScale, elderMode = elderMode, modifier = Modifier.weight(1f), onClick = onSaveAs)
+                ActionButton(text = "导出", fontScale = textScale, elderMode = elderMode, modifier = Modifier.weight(1f), onClick = onExport)
             }
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxSize()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(spacing),
+                ) {
+                    Text(
+                        text = state.displayName,
+                        fontSize = appTextSize(elderMode, state.settings.fontScale, 18.sp),
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = "点开即可编辑，修改会自动保留草稿。",
+                        fontSize = appTextSize(elderMode, state.settings.fontScale, 13.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        value = state.draftContent,
+                        onValueChange = onDraftChange,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(spacing),
-                    ) {
-                        Text(
-                            text = state.displayName,
-                            fontSize = appTextSize(elderMode, state.settings.fontScale, 18.sp),
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = "点开即可编辑，修改会自动保留草稿。",
-                            fontSize = appTextSize(elderMode, state.settings.fontScale, 13.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        OutlinedTextField(
-                            value = state.draftContent,
-                            onValueChange = onDraftChange,
+                            .weight(1f),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = appTextSize(elderMode, state.settings.fontScale, 18.sp)),
+                    )
+                }
+            }
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxSize()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(spacing),
+                ) {
+                    Text(
+                        text = "预览",
+                        fontSize = appTextSize(elderMode, state.settings.fontScale, 18.sp),
+                        fontWeight = FontWeight.Medium,
+                    )
+                    if (previewContent.isBlank()) {
+                        Text("暂无内容")
+                    } else {
+                        MarkdownPreview(
+                            content = previewContent,
+                            fontScale = textScale,
+                            lineHeightScale = state.settings.lineHeightScale,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = if (elderMode) 420.dp else 320.dp),
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = appTextSize(elderMode, state.settings.fontScale, 18.sp)),
+                                .weight(1f)
+                                .padding(12.dp),
                         )
-                    }
-                }
-            }
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(spacing),
-                    ) {
-                        Text(
-                            text = "预览",
-                            fontSize = appTextSize(elderMode, state.settings.fontScale, 18.sp),
-                            fontWeight = FontWeight.Medium,
-                        )
-                        if (previewContent.isBlank()) {
-                            Text("暂无内容")
-                        } else {
-                            Surface(color = MaterialTheme.colorScheme.background) {
-                                MarkdownPreview(
-                                    content = previewContent,
-                                    fontScale = textScale,
-                                    lineHeightScale = state.settings.lineHeightScale,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = if (elderMode) 360.dp else 280.dp)
-                                        .padding(12.dp)
-                                        .verticalScroll(rememberScrollState()),
-                                )
-                            }
-                        }
                     }
                 }
             }
