@@ -14,6 +14,7 @@ data class RecentFile(
     val displayName: String,
     val lastOpenedAt: Long,
     val canWrite: Boolean,
+    val previewSnippet: String = "",
 )
 
 data class ReaderSettings(

@@ -5,13 +5,24 @@ import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
 import android.provider.OpenableColumns
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
 import java.nio.charset.Charset
+import java.nio.charset.CharsetDecoder
+import java.nio.charset.CodingErrorAction
 import org.json.JSONArray
 import org.json.JSONObject
 
 class DocumentRepository(private val context: Context) {
+    private companion object {
+        const val DEFAULT_MAX_READ_BYTES = 8L * 1024L * 1024L
+        const val KEY_RECENT_FILES = "recent_files"
+        const val KEY_ELDER_MODE = "elder_mode"
+        const val KEY_FONT_SCALE = "font_scale"
+        const val KEY_LINE_HEIGHT_SCALE = "line_height_scale"
+        const val KEY_DRAFT = "draft"
+    }
+
     private val resolver = context.contentResolver
     private val prefs = context.getSharedPreferences("readmd", Context.MODE_PRIVATE)
 
@@ -25,13 +36,46 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
-    fun readText(uri: Uri): String {
-        resolver.openInputStream(uri).use { input ->
-            requireNotNull(input) { "无法打开文件输入流" }
-            BufferedReader(InputStreamReader(input, Charset.forName("UTF-8"))).use { reader ->
-                return reader.readText()
+    fun displayName(uri: Uri): String {
+        return queryDisplayName(uri) ?: uri.lastPathSegment?.substringAfterLast('/') ?: "未命名.md"
+    }
+
+    fun fileSize(uri: Uri): Long? {
+        var cursor: Cursor? = null
+        return try {
+            cursor = resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
+            if (cursor != null && cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.SIZE)
+                if (index >= 0 && !cursor.isNull(index)) cursor.getLong(index) else null
+            } else {
+                null
             }
+        } finally {
+            cursor?.close()
         }
+    }
+
+    fun readText(uri: Uri, maxBytes: Long = DEFAULT_MAX_READ_BYTES): String {
+        val charsets = listOf(
+            Charsets.UTF_8,
+            Charset.forName("UTF-16LE"),
+            Charset.forName("UTF-16BE"),
+            Charset.forName("GBK"),
+        )
+        var lastError: Throwable? = null
+        for (charset in charsets) {
+            runCatching {
+                resolver.openInputStream(uri).use { input ->
+                    requireNotNull(input) { "无法打开文件输入流" }
+                    val bytes = readAllBytesLimited(input, maxBytes)
+                    val decoder: CharsetDecoder = charset.newDecoder()
+                        .onMalformedInput(CodingErrorAction.REPLACE)
+                        .onUnmappableCharacter(CodingErrorAction.REPLACE)
+                    return decoder.decode(ByteBuffer.wrap(bytes)).toString()
+                }
+            }.onFailure { lastError = it }
+        }
+        throw IllegalStateException(lastError?.message ?: "无法读取文件内容")
     }
 
     fun writeText(uri: Uri, content: String) {
@@ -42,16 +86,21 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
-    fun displayName(uri: Uri): String {
-        return queryDisplayName(uri) ?: uri.lastPathSegment?.substringAfterLast('/') ?: "未命名.md"
-    }
-
     fun canWrite(uri: Uri): Boolean {
         val persisted = resolver.persistedUriPermissions.firstOrNull { it.uri == uri }
         return persisted?.isWritePermission == true
     }
 
     fun rememberRecentFile(uri: Uri, displayName: String, canWrite: Boolean) {
+        rememberRecentFile(uri, displayName, canWrite, previewSnippet = "")
+    }
+
+    fun rememberRecentFile(
+        uri: Uri,
+        displayName: String,
+        canWrite: Boolean,
+        previewSnippet: String,
+    ) {
         val current = recentFiles().filterNot { it.uri == uri.toString() }.toMutableList()
         current.add(
             index = 0,
@@ -60,6 +109,7 @@ class DocumentRepository(private val context: Context) {
                 displayName = displayName,
                 lastOpenedAt = System.currentTimeMillis(),
                 canWrite = canWrite,
+                previewSnippet = previewSnippet,
             ),
         )
         saveRecentFiles(current.take(10))
@@ -78,6 +128,7 @@ class DocumentRepository(private val context: Context) {
                             displayName = item.getString("displayName"),
                             lastOpenedAt = item.optLong("lastOpenedAt"),
                             canWrite = item.optBoolean("canWrite"),
+                            previewSnippet = item.optString("previewSnippet"),
                         ),
                     )
                 }
@@ -136,6 +187,17 @@ class DocumentRepository(private val context: Context) {
         prefs.edit().remove(KEY_DRAFT).apply()
     }
 
+    fun buildPreviewSnippet(content: String, maxChars: Int = 160): String {
+        val normalized = content.lines()
+            .asSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .take(4)
+            .joinToString(" ")
+        val trimmed = if (normalized.length > maxChars) normalized.take(maxChars) + "…" else normalized
+        return trimmed.ifBlank { "空白文档" }
+    }
+
     private fun saveRecentFiles(files: List<RecentFile>) {
         val array = JSONArray()
         files.forEach { file ->
@@ -144,7 +206,8 @@ class DocumentRepository(private val context: Context) {
                     .put("uri", file.uri)
                     .put("displayName", file.displayName)
                     .put("lastOpenedAt", file.lastOpenedAt)
-                    .put("canWrite", file.canWrite),
+                    .put("canWrite", file.canWrite)
+                    .put("previewSnippet", file.previewSnippet),
             )
         }
         prefs.edit().putString(KEY_RECENT_FILES, array.toString()).apply()
@@ -165,11 +228,19 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
-    private companion object {
-        const val KEY_RECENT_FILES = "recent_files"
-        const val KEY_ELDER_MODE = "elder_mode"
-        const val KEY_FONT_SCALE = "font_scale"
-        const val KEY_LINE_HEIGHT_SCALE = "line_height_scale"
-        const val KEY_DRAFT = "draft"
+    private fun readAllBytesLimited(input: java.io.InputStream, maxBytes: Long): ByteArray {
+        val buffer = ByteArrayOutputStream()
+        val chunk = ByteArray(DEFAULT_BUFFER_SIZE)
+        var total = 0L
+        while (true) {
+            val read = input.read(chunk)
+            if (read <= 0) break
+            total += read
+            if (total > maxBytes) {
+                throw IllegalStateException("文件过大，建议拆分后再打开")
+            }
+            buffer.write(chunk, 0, read)
+        }
+        return buffer.toByteArray()
     }
 }

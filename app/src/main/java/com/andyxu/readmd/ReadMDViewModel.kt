@@ -17,6 +17,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class ReadMDViewModel(application: Application) : AndroidViewModel(application) {
+    private companion object {
+        const val MAX_OPEN_BYTES = 8L * 1024L * 1024L
+    }
+
+    private data class OpenedDocumentResult(
+        val name: String,
+        val content: String,
+        val canWrite: Boolean,
+        val snippet: String,
+    )
+
     private val repository = DocumentRepository(application)
     private val restoredDraft = repository.draftSnapshot()
     private val _state = MutableStateFlow(
@@ -86,6 +97,23 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
 
     fun requestExport() {
         _state.update { it.copy(pendingSaveTarget = SaveTarget.Export) }
+    }
+
+    fun closeDocument() {
+        _state.update {
+            it.copy(
+                currentUri = null,
+                displayName = "未命名.md",
+                content = "",
+                draftContent = "",
+                previewContent = null,
+                isEditing = false,
+                hasUnsavedChanges = false,
+                draftUpdatedAt = null,
+                canWriteCurrentFile = false,
+                message = "已返回首页",
+            )
+        }
     }
 
     fun clearPendingSaveTarget() {
@@ -205,6 +233,14 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun setFontScale(scale: Float) {
+        _state.update { it.copyAndSaveSettings(it.settings.copy(fontScale = scale.coerceIn(0.85f, 1.8f))) }
+    }
+
+    fun setLineHeightScale(scale: Float) {
+        _state.update { it.copyAndSaveSettings(it.settings.copy(lineHeightScale = scale.coerceIn(0.85f, 1.8f))) }
+    }
+
     fun updateSearch(query: String) {
         _state.update { it.copy(searchQuery = query) }
     }
@@ -224,27 +260,32 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val name = repository.displayName(uri)
+                    val size = repository.fileSize(uri)
+                    if (size != null && size > MAX_OPEN_BYTES) {
+                        throw IllegalStateException("文件过大，建议拆分后再打开")
+                    }
                     val content = repository.readText(uri)
                     val canWrite = repository.canWrite(uri)
-                    repository.rememberRecentFile(uri, name, canWrite)
-                    Triple(name, content, canWrite)
+                    val snippet = repository.buildPreviewSnippet(content)
+                    repository.rememberRecentFile(uri, name, canWrite, snippet)
+                    OpenedDocumentResult(name, content, canWrite, snippet)
                 }
             }
-            result.onSuccess { (name, content, canWrite) ->
+            result.onSuccess { document ->
                 _state.update {
                     it.copy(
                         currentUri = uri,
-                        displayName = name,
-                        content = content,
-                        draftContent = content,
+                        displayName = document.name,
+                        content = document.content,
+                        draftContent = document.content,
                         previewContent = null,
                         isEditing = false,
                         hasUnsavedChanges = false,
                         draftUpdatedAt = null,
                         isLoading = false,
-                        canWriteCurrentFile = canWrite,
+                        canWriteCurrentFile = document.canWrite,
                         recentFiles = repository.recentFiles(),
-                        message = "已打开 $name",
+                        message = "已打开 ${document.name}",
                     )
                 }
                 repository.clearDraft()
@@ -273,7 +314,12 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                     val name = repository.displayName(uri)
                     val canWrite = repository.canWrite(uri)
                     if (switchCurrentFile) {
-                        repository.rememberRecentFile(uri, name, canWrite)
+                        repository.rememberRecentFile(
+                            uri = uri,
+                            displayName = name,
+                            canWrite = canWrite,
+                            previewSnippet = repository.buildPreviewSnippet(content),
+                        )
                     }
                     Triple(name, content, canWrite)
                 }
