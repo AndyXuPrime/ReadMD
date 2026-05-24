@@ -17,7 +17,16 @@ ReadMD 计划解决手机端 Markdown 文件阅读、编辑和导出不方便的
 ## 文档
 
 - [需求分析文档](docs/requirements-analysis.md)
+- [阶段 01 开发记录：Android 工程骨架](docs/development/stage-01-android-foundation.md)
 
 ## 当前状态
 
-项目处于需求分析与原型设计阶段，尚未开始 Android 工程实现。
+项目已完成 Android + Jetpack Compose 工程骨架，当前首屏为占位 UI，已支持 Debug 构建。
+
+已验证：
+
+```powershell
+.\gradlew.bat :app:assembleDebug
+```
+
+下一阶段将实现系统文件选择器、Markdown 文件读取、编辑、保存和 Markdown 导出闭环。

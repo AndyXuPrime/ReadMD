@@ -1,0 +1,21 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android Studio
+.idea/
+*.iml
+local.properties
+
+# Keystores
+*.jks
+*.keystore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Codex scratch
+.codex_deps/
+
