@@ -19,6 +19,7 @@ ReadMD 计划解决手机端 Markdown 文件阅读、编辑和导出不方便的
 - [需求分析文档](docs/requirements-analysis.md)
 - [使用说明](docs/user-guide.md)
 - [下载安装说明](docs/installation.md)
+- [设计准则文档](docs/design-principles.md)
 - [阶段 01 开发记录：Android 工程骨架](docs/development/stage-01-android-foundation.md)
 - [阶段 02 开发记录：本地备忘录 MVP 闭环](docs/development/stage-02-local-memo-mvp.md)
 - [阶段 03 开发记录：稳定性与文档](docs/development/stage-03-stability-docs.md)
