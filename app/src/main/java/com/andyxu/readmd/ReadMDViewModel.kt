@@ -37,16 +37,23 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun initialState(): DocumentState {
         val settings = repository.readerSettings()
-        return if (restoredDraft != null && restoredDraft.draftContent.isNotBlank()) {
+        val restoredContent = restoredDraft?.let {
+            it.copy(
+                displayName = repository.sanitizeText(it.displayName),
+                content = repository.sanitizeText(it.content),
+                draftContent = repository.sanitizeText(it.draftContent),
+            )
+        }
+        return if (restoredContent != null && restoredContent.draftContent.isNotBlank()) {
             DocumentState(
-                currentUri = restoredDraft.currentUri?.let(Uri::parse),
-                displayName = restoredDraft.displayName,
-                content = restoredDraft.content,
-                draftContent = restoredDraft.draftContent,
+                currentUri = restoredContent.currentUri?.let(Uri::parse),
+                displayName = restoredContent.displayName,
+                content = restoredContent.content,
+                draftContent = restoredContent.draftContent,
                 isEditing = true,
-                hasUnsavedChanges = restoredDraft.draftContent != restoredDraft.content,
-                draftUpdatedAt = restoredDraft.updatedAt,
-                canWriteCurrentFile = restoredDraft.canWriteCurrentFile,
+                hasUnsavedChanges = restoredContent.draftContent != restoredContent.content,
+                draftUpdatedAt = restoredContent.updatedAt,
+                canWriteCurrentFile = restoredContent.canWriteCurrentFile,
                 settings = settings,
                 recentFiles = repository.recentFiles(),
                 message = "已恢复上次未保存草稿",
@@ -264,7 +271,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                     if (size != null && size > MAX_OPEN_BYTES) {
                         throw IllegalStateException("文件过大，建议拆分后再打开")
                     }
-                    val content = repository.readText(uri)
+                    val content = repository.sanitizeText(repository.readText(uri))
                     val canWrite = repository.canWrite(uri)
                     val snippet = repository.buildPreviewSnippet(content)
                     repository.rememberRecentFile(uri, name, canWrite, snippet)
@@ -313,15 +320,16 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                     repository.writeText(uri, content)
                     val name = repository.displayName(uri)
                     val canWrite = repository.canWrite(uri)
+                    val safeContent = repository.sanitizeText(content)
                     if (switchCurrentFile) {
                         repository.rememberRecentFile(
                             uri = uri,
                             displayName = name,
                             canWrite = canWrite,
-                            previewSnippet = repository.buildPreviewSnippet(content),
+                            previewSnippet = repository.buildPreviewSnippet(safeContent),
                         )
                     }
-                    Triple(name, content, canWrite)
+                    Triple(name, safeContent, canWrite)
                 }
             }
             result.onSuccess { (name, savedContent, canWrite) ->

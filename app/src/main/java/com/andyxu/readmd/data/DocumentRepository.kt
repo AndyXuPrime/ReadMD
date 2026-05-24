@@ -56,26 +56,11 @@ class DocumentRepository(private val context: Context) {
     }
 
     fun readText(uri: Uri, maxBytes: Long = DEFAULT_MAX_READ_BYTES): String {
-        val charsets = listOf(
-            Charsets.UTF_8,
-            Charset.forName("UTF-16LE"),
-            Charset.forName("UTF-16BE"),
-            Charset.forName("GBK"),
-        )
-        var lastError: Throwable? = null
-        for (charset in charsets) {
-            runCatching {
-                resolver.openInputStream(uri).use { input ->
-                    requireNotNull(input) { "无法打开文件输入流" }
-                    val bytes = readAllBytesLimited(input, maxBytes)
-                    val decoder: CharsetDecoder = charset.newDecoder()
-                        .onMalformedInput(CodingErrorAction.REPLACE)
-                        .onUnmappableCharacter(CodingErrorAction.REPLACE)
-                    return decoder.decode(ByteBuffer.wrap(bytes)).toString()
-                }
-            }.onFailure { lastError = it }
+        resolver.openInputStream(uri).use { input ->
+            requireNotNull(input) { "无法打开文件输入流" }
+            val bytes = readAllBytesLimited(input, maxBytes)
+            return decodeText(bytes)
         }
-        throw IllegalStateException(lastError?.message ?: "无法读取文件内容")
     }
 
     fun writeText(uri: Uri, content: String) {
@@ -106,10 +91,10 @@ class DocumentRepository(private val context: Context) {
             index = 0,
             element = RecentFile(
                 uri = uri.toString(),
-                displayName = displayName,
+                displayName = sanitizeText(displayName),
                 lastOpenedAt = System.currentTimeMillis(),
                 canWrite = canWrite,
-                previewSnippet = previewSnippet,
+                previewSnippet = sanitizeText(previewSnippet),
             ),
         )
         saveRecentFiles(current.take(10))
@@ -125,10 +110,10 @@ class DocumentRepository(private val context: Context) {
                     add(
                         RecentFile(
                             uri = item.getString("uri"),
-                            displayName = item.getString("displayName"),
+                            displayName = sanitizeText(item.getString("displayName")),
                             lastOpenedAt = item.optLong("lastOpenedAt"),
                             canWrite = item.optBoolean("canWrite"),
-                            previewSnippet = item.optString("previewSnippet"),
+                            previewSnippet = sanitizeText(item.optString("previewSnippet")),
                         ),
                     )
                 }
@@ -159,9 +144,9 @@ class DocumentRepository(private val context: Context) {
     fun saveDraft(snapshot: DraftSnapshot) {
         val value = JSONObject()
             .put("currentUri", snapshot.currentUri)
-            .put("displayName", snapshot.displayName)
-            .put("content", snapshot.content)
-            .put("draftContent", snapshot.draftContent)
+            .put("displayName", sanitizeText(snapshot.displayName))
+            .put("content", sanitizeText(snapshot.content))
+            .put("draftContent", sanitizeText(snapshot.draftContent))
             .put("canWriteCurrentFile", snapshot.canWriteCurrentFile)
             .put("updatedAt", snapshot.updatedAt)
             .toString()
@@ -174,9 +159,9 @@ class DocumentRepository(private val context: Context) {
             val value = JSONObject(raw)
             DraftSnapshot(
                 currentUri = value.optString("currentUri").takeUnless { it.isBlank() || it == "null" },
-                displayName = value.optString("displayName", "自动恢复草稿.md"),
-                content = value.optString("content"),
-                draftContent = value.optString("draftContent"),
+                displayName = sanitizeText(value.optString("displayName", "自动恢复草稿.md")),
+                content = sanitizeText(value.optString("content")),
+                draftContent = sanitizeText(value.optString("draftContent")),
                 canWriteCurrentFile = value.optBoolean("canWriteCurrentFile"),
                 updatedAt = value.optLong("updatedAt"),
             )
@@ -188,7 +173,8 @@ class DocumentRepository(private val context: Context) {
     }
 
     fun buildPreviewSnippet(content: String, maxChars: Int = 160): String {
-        val normalized = content.lines()
+        val normalized = sanitizeText(content)
+            .lines()
             .asSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() }
@@ -204,10 +190,10 @@ class DocumentRepository(private val context: Context) {
             array.put(
                 JSONObject()
                     .put("uri", file.uri)
-                    .put("displayName", file.displayName)
+                    .put("displayName", sanitizeText(file.displayName))
                     .put("lastOpenedAt", file.lastOpenedAt)
                     .put("canWrite", file.canWrite)
-                    .put("previewSnippet", file.previewSnippet),
+                    .put("previewSnippet", sanitizeText(file.previewSnippet)),
             )
         }
         prefs.edit().putString(KEY_RECENT_FILES, array.toString()).apply()
@@ -242,5 +228,66 @@ class DocumentRepository(private val context: Context) {
             buffer.write(chunk, 0, read)
         }
         return buffer.toByteArray()
+    }
+
+    fun sanitizeText(text: String): String {
+        return text
+            .replace("\uFEFF", "")
+            .replace("\u0000", "")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+    }
+
+    private fun decodeText(bytes: ByteArray): String {
+        val candidates = buildList {
+            when {
+                bytes.size >= 3 &&
+                    bytes[0] == 0xEF.toByte() &&
+                    bytes[1] == 0xBB.toByte() &&
+                    bytes[2] == 0xBF.toByte() -> add(Charsets.UTF_8)
+
+                bytes.size >= 2 &&
+                    bytes[0] == 0xFF.toByte() &&
+                    bytes[1] == 0xFE.toByte() -> add(Charset.forName("UTF-16LE"))
+
+                bytes.size >= 2 &&
+                    bytes[0] == 0xFE.toByte() &&
+                    bytes[1] == 0xFF.toByte() -> add(Charset.forName("UTF-16BE"))
+            }
+            add(Charsets.UTF_8)
+            add(Charset.forName("UTF-16LE"))
+            add(Charset.forName("UTF-16BE"))
+            add(Charset.forName("GBK"))
+        }.distinct()
+
+        for (charset in candidates) {
+            runCatching {
+                val start = when {
+                    charset == Charsets.UTF_8 &&
+                        bytes.size >= 3 &&
+                        bytes[0] == 0xEF.toByte() &&
+                        bytes[1] == 0xBB.toByte() &&
+                        bytes[2] == 0xBF.toByte() -> 3
+
+                    charset.name() == "UTF-16LE" &&
+                        bytes.size >= 2 &&
+                        bytes[0] == 0xFF.toByte() &&
+                        bytes[1] == 0xFE.toByte() -> 2
+
+                    charset.name() == "UTF-16BE" &&
+                        bytes.size >= 2 &&
+                        bytes[0] == 0xFE.toByte() &&
+                        bytes[1] == 0xFF.toByte() -> 2
+
+                    else -> 0
+                }
+                val decoder: CharsetDecoder = charset.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                val decoded = decoder.decode(ByteBuffer.wrap(bytes, start, bytes.size - start)).toString()
+                return sanitizeText(decoded)
+            }
+        }
+        return sanitizeText(String(bytes, Charsets.UTF_8))
     }
 }

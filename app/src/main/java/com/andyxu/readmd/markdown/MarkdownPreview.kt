@@ -48,9 +48,10 @@ fun MarkdownPreview(
     lineHeightScale: Float,
     modifier: Modifier = Modifier,
 ) {
-    val blocks = remember(content) {
-        runCatching { parseMarkdownBlocks(content) }
-            .getOrElse { listOf(MarkdownBlock.Paragraph(content)) }
+    val normalizedContent = remember(content) { sanitizeMarkdownText(content) }
+    val blocks = remember(normalizedContent) {
+        runCatching { parseMarkdownBlocks(normalizedContent) }
+            .getOrElse { listOf(MarkdownBlock.Paragraph(normalizedContent)) }
     }
     Column(
         modifier = modifier,
@@ -60,6 +61,14 @@ fun MarkdownPreview(
             MarkdownBlockView(block, fontScale, lineHeightScale)
         }
     }
+}
+
+private fun sanitizeMarkdownText(content: String): String {
+    return content
+        .replace("\uFEFF", "")
+        .replace("\u0000", "")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
 }
 
 private fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
