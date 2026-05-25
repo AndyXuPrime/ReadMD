@@ -42,6 +42,7 @@ ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点
 - [阶段 01 开发记录：Android 工程骨架](docs/development/stage-01-android-foundation.md)
 - [阶段 02 开发记录：本地备忘录 MVP 闭环](docs/development/stage-02-local-memo-mvp.md)
 - [阶段 03 开发记录：稳定性与文档](docs/development/stage-03-stability-docs.md)
+- [阶段 03 补充记录：稳定性跟进](docs/development/stage-03-stability-followup.md)
 - [阶段 04 开发记录：真机反馈修复](docs/development/stage-04-user-feedback-fixes.md)
 
 ## 当前状态
@@ -63,6 +64,8 @@ ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点
 - 自动草稿保护
 - 基于成熟 Android Markdown 渲染方案显示常见 Markdown 内容
 
+当前尚未实现 PDF、JPG、PNG 导出，也尚未提供正式签名的 Release APK。
+
 ## 构建验证
 
 已验证：
@@ -77,4 +80,4 @@ Debug APK 构建产物：
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-下一阶段将继续打磨真机阅读体验、输入法场景、Release APK 和发布流程。
+下一阶段将继续打磨真机阅读体验、兼容性测试、Release APK 和发布流程。

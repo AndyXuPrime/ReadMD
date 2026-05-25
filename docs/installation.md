@@ -31,6 +31,12 @@ Android 设备：
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
+如需在安装前同时执行单元测试和构建，可以运行：
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug
+```
+
 说明：
 
 - Debug APK 适合开发测试。
@@ -130,4 +136,3 @@ D:\AndroidDevelop\AndroidSdk\cmdline-tools\latest\bin
 - 版本更新说明
 
 当前阶段先以 Debug APK 和手动安装为主。
-
