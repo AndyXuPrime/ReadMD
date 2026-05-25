@@ -124,8 +124,16 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 hasUnsavedChanges = false,
                 draftUpdatedAt = null,
                 canWriteCurrentFile = false,
-                message = "已返回首页",
+                message = null,
             )
+        }
+    }
+
+    fun handleBack() {
+        val current = _state.value
+        when {
+            current.isEditing -> previewDraft(showMessage = false)
+            current.currentUri != null || current.content.isNotBlank() || current.draftContent.isNotBlank() -> closeDocument()
         }
     }
 
@@ -185,14 +193,15 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun previewDraft() {
-        _state.update {
-            it.copy(
-                previewContent = it.draftContent,
+    fun previewDraft(showMessage: Boolean = true) {
+        _state.update { current ->
+            val hasUnsaved = current.draftContent != current.content
+            current.copy(
+                previewContent = current.draftContent,
                 isEditing = false,
-                hasUnsavedChanges = true,
-                draftUpdatedAt = System.currentTimeMillis(),
-                message = "正在预览未保存内容",
+                hasUnsavedChanges = hasUnsaved,
+                draftUpdatedAt = if (hasUnsaved) System.currentTimeMillis() else null,
+                message = if (showMessage && hasUnsaved) "正在预览未保存内容" else null,
             )
         }
         saveCurrentDraft()
@@ -304,7 +313,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                         isLoading = false,
                         canWriteCurrentFile = document.canWrite,
                         recentFiles = repository.recentFiles(),
-                        message = "已打开 ${document.name}",
+                        message = null,
                     )
                 }
                 repository.clearDraft()
@@ -327,7 +336,6 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
     ) {
         _state.update { it.copy(isLoading = true, message = null) }
         viewModelScope.launch {
-            val currentEditing = _state.value.isEditing
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     repository.writeText(uri, content)
@@ -354,7 +362,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                             content = savedContent,
                             draftContent = savedContent,
                             previewContent = null,
-                            isEditing = currentEditing,
+                            isEditing = false,
                             hasUnsavedChanges = false,
                             draftUpdatedAt = null,
                             canWriteCurrentFile = canWrite,

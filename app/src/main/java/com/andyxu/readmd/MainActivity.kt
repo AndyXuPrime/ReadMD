@@ -4,6 +4,7 @@ package com.andyxu.readmd
 
 import android.net.Uri
 import android.os.Bundle
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -12,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,6 +117,14 @@ private fun ReadMDAppShell(
     var showSettings by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
+    BackHandler(enabled = showSettings) {
+        showSettings = false
+    }
+
+    BackHandler(enabled = !showSettings && isDocumentMode) {
+        viewModel.handleBack()
+    }
+
     LaunchedEffect(state.pendingSaveTarget) {
         val target = state.pendingSaveTarget ?: return@LaunchedEffect
         val suggestedName = viewModel.suggestedFileName()
@@ -158,6 +169,7 @@ private fun ReadMDAppShell(
             onEnterEdit = viewModel::enterEditMode,
             onReturnToReading = viewModel::previewDraft,
             onDraftChange = viewModel::updateDraft,
+            onFontScaleChange = viewModel::setFontScale,
         )
     } else {
         ReadMDHomeScreen(
@@ -319,6 +331,7 @@ private fun ReadMDDocumentScreen(
     onEnterEdit: () -> Unit,
     onReturnToReading: () -> Unit,
     onDraftChange: (String) -> Unit,
+    onFontScaleChange: (Float) -> Unit,
 ) {
     val elderMode = state.settings.elderMode
     val textScale = uiTextScale(elderMode, state.settings.fontScale)
@@ -391,6 +404,7 @@ private fun ReadMDDocumentScreen(
                     .padding(innerPadding)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 onEnterEdit = onEnterEdit,
+                onFontScaleChange = onFontScaleChange,
             )
         }
     }
@@ -404,6 +418,7 @@ private fun ReadMDReadingMode(
     textScale: Float,
     modifier: Modifier = Modifier,
     onEnterEdit: () -> Unit,
+    onFontScaleChange: (Float) -> Unit,
 ) {
     val elderMode = state.settings.elderMode
     Column(
@@ -418,7 +433,16 @@ private fun ReadMDReadingMode(
             textAlign = TextAlign.Center,
         )
         Card(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .pointerInput(state.settings.fontScale) {
+                    detectTransformGestures { _, _, zoom, _ ->
+                        val target = (state.settings.fontScale * zoom).coerceIn(0.85f, 1.8f)
+                        if (kotlin.math.abs(target - state.settings.fontScale) >= 0.02f) {
+                            onFontScaleChange(target)
+                        }
+                    }
+                },
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(22.dp),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
