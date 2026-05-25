@@ -14,6 +14,13 @@ ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点
 
 当前不规划 iOS、云同步、多端同步、双链、知识图谱、插件系统、密码保护或本地加密笔记。
 
+## 下载与获取
+
+- 源码仓库：<https://github.com/AndyXuPrime/ReadMD>
+- 当前正式 Release APK：尚未发布
+- 本地安装包获取方式：可按 [下载安装说明](docs/installation.md) 在本机自行构建 `app-debug.apk`
+- 后续正式发布：会优先通过 GitHub Releases 提供下载入口
+
 ## 项目亮点
 
 - 阅读页和编辑页分离，默认先进入阅读页，给 Markdown 预览更大的空间。
