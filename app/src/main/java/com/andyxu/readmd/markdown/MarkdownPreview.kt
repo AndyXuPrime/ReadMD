@@ -1,5 +1,8 @@
 package com.andyxu.readmd.markdown
 
+import android.content.Context
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.text.method.ScrollingMovementMethod
 import android.widget.TextView
 import androidx.compose.runtime.Composable
@@ -22,6 +25,8 @@ fun MarkdownPreview(
     content: String,
     fontScale: Float,
     lineHeightScale: Float,
+    gestureFontScale: Float = fontScale,
+    onFontScaleChange: ((Float) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -39,23 +44,99 @@ fun MarkdownPreview(
     AndroidView(
         modifier = modifier,
         factory = { viewContext ->
-            TextView(viewContext).apply {
-                setTextIsSelectable(true)
-                includeFontPadding = true
-                isVerticalScrollBarEnabled = true
-                movementMethod = ScrollingMovementMethod()
-            }
+            ZoomableMarkdownTextView(viewContext)
         },
         update = { textView ->
-            textView.textSize = 16f * fontScale
-            textView.setLineSpacing(0f, lineHeightScale.coerceIn(0.85f, 1.8f))
-            textView.setTextColor(colors.onSurface.toArgb())
-            textView.setHintTextColor(colors.onSurfaceVariant.toArgb())
-            textView.setLinkTextColor(colors.primary.toArgb())
-            textView.setBackgroundColor(colors.surface.toArgb())
-            markwon.setMarkdown(textView, safeContent)
+            textView.bind(
+                markwon = markwon,
+                markdown = safeContent,
+                fontScale = fontScale,
+                gestureFontScale = gestureFontScale,
+                lineHeightScale = lineHeightScale,
+                textColor = colors.onSurface.toArgb(),
+                hintColor = colors.onSurfaceVariant.toArgb(),
+                linkColor = colors.primary.toArgb(),
+                backgroundColor = colors.surface.toArgb(),
+                onFontScaleChange = onFontScaleChange,
+            )
         },
     )
+}
+
+private class ZoomableMarkdownTextView(
+    context: Context,
+) : TextView(context) {
+    private var renderedMarkdown: String? = null
+    private var currentFontScale: Float = 1f
+    private var scaleCallback: ((Float) -> Unit)? = null
+    private val scaleDetector = ScaleGestureDetector(
+        context,
+        object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+                parent?.requestDisallowInterceptTouchEvent(true)
+                return true
+            }
+
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val target = (currentFontScale * detector.scaleFactor).coerceIn(0.85f, 1.8f)
+                if (kotlin.math.abs(target - currentFontScale) >= 0.01f) {
+                    currentFontScale = target
+                    scaleCallback?.invoke(target)
+                }
+                return true
+            }
+
+            override fun onScaleEnd(detector: ScaleGestureDetector) {
+                parent?.requestDisallowInterceptTouchEvent(false)
+            }
+        },
+    )
+
+    init {
+        includeFontPadding = true
+        isVerticalScrollBarEnabled = true
+        overScrollMode = OVER_SCROLL_IF_CONTENT_SCROLLS
+        movementMethod = ScrollingMovementMethod()
+        setTextIsSelectable(false)
+    }
+
+    fun bind(
+        markwon: Markwon,
+        markdown: String,
+        fontScale: Float,
+        gestureFontScale: Float,
+        lineHeightScale: Float,
+        textColor: Int,
+        hintColor: Int,
+        linkColor: Int,
+        backgroundColor: Int,
+        onFontScaleChange: ((Float) -> Unit)?,
+    ) {
+        currentFontScale = gestureFontScale
+        scaleCallback = onFontScaleChange
+        textSize = 16f * fontScale
+        setLineSpacing(0f, lineHeightScale.coerceIn(0.85f, 1.8f))
+        setTextColor(textColor)
+        setHintTextColor(hintColor)
+        setLinkTextColor(linkColor)
+        setBackgroundColor(backgroundColor)
+        if (renderedMarkdown != markdown) {
+            markwon.setMarkdown(this, markdown)
+            renderedMarkdown = markdown
+        }
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        val scaleHandled = scaleDetector.onTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            parent?.requestDisallowInterceptTouchEvent(false)
+        }
+        if (event.pointerCount > 1 || scaleDetector.isInProgress) {
+            parent?.requestDisallowInterceptTouchEvent(true)
+            return true
+        }
+        return if (scaleHandled) true else super.onTouchEvent(event)
+    }
 }
 
 private fun String.limitForPreview(): String {

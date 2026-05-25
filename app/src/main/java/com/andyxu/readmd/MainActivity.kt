@@ -13,7 +13,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,7 +55,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,6 +72,7 @@ import com.andyxu.readmd.ui.theme.ReadMDTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -425,6 +424,7 @@ private fun ReadMDReadingMode(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(spacing),
     ) {
+        val previewScalePercent = (state.settings.fontScale * 100).roundToInt()
         Text(
             text = state.displayName,
             fontSize = appTextSize(elderMode, state.settings.fontScale, 20.sp),
@@ -432,17 +432,15 @@ private fun ReadMDReadingMode(
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
         )
+        Text(
+            text = "阅读字号 ${previewScalePercent}% · 可双指缩放",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = appTextSize(elderMode, state.settings.fontScale, 13.sp),
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+        )
         Card(
-            modifier = Modifier
-                .weight(1f)
-                .pointerInput(state.settings.fontScale) {
-                    detectTransformGestures { _, _, zoom, _ ->
-                        val target = (state.settings.fontScale * zoom).coerceIn(0.85f, 1.8f)
-                        if (kotlin.math.abs(target - state.settings.fontScale) >= 0.02f) {
-                            onFontScaleChange(target)
-                        }
-                    }
-                },
+            modifier = Modifier.weight(1f),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(22.dp),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
@@ -466,6 +464,8 @@ private fun ReadMDReadingMode(
                     content = previewContent,
                     fontScale = textScale,
                     lineHeightScale = state.settings.lineHeightScale,
+                    gestureFontScale = state.settings.fontScale,
+                    onFontScaleChange = onFontScaleChange,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 18.dp, vertical = 16.dp),
