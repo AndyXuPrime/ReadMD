@@ -19,6 +19,7 @@ data class RecentFile(
 
 data class ReaderSettings(
     val elderMode: Boolean = false,
+    val darkMode: Boolean = false,
     val fontScale: Float = 1f,
     val lineHeightScale: Float = 1f,
 )

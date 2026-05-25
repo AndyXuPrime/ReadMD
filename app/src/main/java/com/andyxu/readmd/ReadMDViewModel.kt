@@ -218,6 +218,12 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun toggleDarkMode() {
+        _state.update {
+            it.copyAndSaveSettings(it.settings.copy(darkMode = !it.settings.darkMode))
+        }
+    }
+
     fun increaseFont() {
         _state.update {
             val settings = it.settings
@@ -292,7 +298,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                         content = document.content,
                         draftContent = document.content,
                         previewContent = null,
-                        isEditing = true,
+                        isEditing = false,
                         hasUnsavedChanges = false,
                         draftUpdatedAt = null,
                         isLoading = false,
@@ -321,6 +327,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
     ) {
         _state.update { it.copy(isLoading = true, message = null) }
         viewModelScope.launch {
+            val currentEditing = _state.value.isEditing
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     repository.writeText(uri, content)
@@ -347,7 +354,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                             content = savedContent,
                             draftContent = savedContent,
                             previewContent = null,
-                            isEditing = true,
+                            isEditing = currentEditing,
                             hasUnsavedChanges = false,
                             draftUpdatedAt = null,
                             canWriteCurrentFile = canWrite,

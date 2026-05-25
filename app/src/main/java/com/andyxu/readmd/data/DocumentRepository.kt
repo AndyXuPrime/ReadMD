@@ -18,6 +18,7 @@ class DocumentRepository(private val context: Context) {
         const val DEFAULT_MAX_READ_BYTES = 8L * 1024L * 1024L
         const val KEY_RECENT_FILES = "recent_files"
         const val KEY_ELDER_MODE = "elder_mode"
+        const val KEY_DARK_MODE = "dark_mode"
         const val KEY_FONT_SCALE = "font_scale"
         const val KEY_LINE_HEIGHT_SCALE = "line_height_scale"
         const val KEY_DRAFT = "draft"
@@ -128,6 +129,7 @@ class DocumentRepository(private val context: Context) {
     fun readerSettings(): ReaderSettings {
         return ReaderSettings(
             elderMode = prefs.getBoolean(KEY_ELDER_MODE, false),
+            darkMode = prefs.getBoolean(KEY_DARK_MODE, false),
             fontScale = prefs.getFloat(KEY_FONT_SCALE, 1f),
             lineHeightScale = prefs.getFloat(KEY_LINE_HEIGHT_SCALE, 1f),
         )
@@ -136,6 +138,7 @@ class DocumentRepository(private val context: Context) {
     fun saveReaderSettings(settings: ReaderSettings) {
         prefs.edit()
             .putBoolean(KEY_ELDER_MODE, settings.elderMode)
+            .putBoolean(KEY_DARK_MODE, settings.darkMode)
             .putFloat(KEY_FONT_SCALE, settings.fontScale)
             .putFloat(KEY_LINE_HEIGHT_SCALE, settings.lineHeightScale)
             .apply()
