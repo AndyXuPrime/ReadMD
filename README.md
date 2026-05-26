@@ -1,5 +1,14 @@
 # ReadMD
 
+<div align="center">
+
+**如果这个项目对你有帮助，请给我们一个 ⭐️**
+
+[![GitHub stars](https://img.shields.io/github/stars/AndyXuPrime/ReadMD?style=social)](https://github.com/AndyXuPrime/ReadMD)
+[![GitHub forks](https://img.shields.io/github/forks/AndyXuPrime/ReadMD?style=social)](https://github.com/AndyXuPrime/ReadMD)
+
+</div>
+
 一款面向 Android 的本地 Markdown 备忘录应用，主打“阅读优先”的打开、浏览、编辑和保存体验，适合快速查看和修改手机里的 Markdown 内容。
 
 ## 项目目标
@@ -88,3 +97,4 @@ app/build/outputs/apk/debug/app-debug.apk
 ```
 
 下一阶段将继续打磨真机阅读体验、兼容性测试、Release APK 和发布流程。
+
