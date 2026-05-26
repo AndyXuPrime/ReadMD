@@ -18,7 +18,7 @@ ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点
 
 - 源码仓库：<https://github.com/AndyXuPrime/ReadMD>
 - 当前正式 Release APK：尚未发布
-- 本地安装包获取方式：可按 [下载安装说明](docs/installation.md) 在本机自行构建 `app-debug.apk`
+- 体验测试包：可使用本机生成的 `app/build/outputs/apk/debug/app-debug.apk`，并按 [下载安装说明](docs/installation.md) 手动安装到手机
 - 后续正式发布：会优先通过 GitHub Releases 提供下载入口
 
 ## 项目亮点
