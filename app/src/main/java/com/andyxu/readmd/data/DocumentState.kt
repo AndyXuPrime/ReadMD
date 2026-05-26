@@ -22,7 +22,14 @@ data class ReaderSettings(
     val darkMode: Boolean = false,
     val fontScale: Float = 1f,
     val lineHeightScale: Float = 1f,
-)
+) {
+    companion object {
+        const val MIN_FONT_SCALE = 0.85f
+        const val MAX_FONT_SCALE = 1.55f
+        const val MIN_LINE_HEIGHT_SCALE = 0.85f
+        const val MAX_LINE_HEIGHT_SCALE = 1.8f
+    }
+}
 
 data class DraftSnapshot(
     val currentUri: String?,
@@ -47,6 +54,7 @@ data class DocumentState(
     val message: String? = null,
     val searchQuery: String = "",
     val settings: ReaderSettings = ReaderSettings(),
+    val readingFontScale: Float = 1f,
     val recentFiles: List<RecentFile> = emptyList(),
     val pendingSaveTarget: SaveTarget? = null,
 ) {

@@ -19,6 +19,8 @@ import io.noties.markwon.ext.tasklist.TaskListPlugin
 import io.noties.markwon.html.HtmlPlugin
 
 private const val MAX_PREVIEW_CHARS = 120_000
+private const val MIN_READING_FONT_SCALE = 0.85f
+private const val MAX_READING_FONT_SCALE = 1.55f
 
 @Composable
 fun MarkdownPreview(
@@ -78,7 +80,8 @@ private class ZoomableMarkdownTextView(
             }
 
             override fun onScale(detector: ScaleGestureDetector): Boolean {
-                val target = (currentFontScale * detector.scaleFactor).coerceIn(0.85f, 1.8f)
+                val target = (currentFontScale * detector.scaleFactor)
+                    .coerceIn(MIN_READING_FONT_SCALE, MAX_READING_FONT_SCALE)
                 if (kotlin.math.abs(target - currentFontScale) >= 0.01f) {
                     currentFontScale = target
                     scaleCallback?.invoke(target)
@@ -115,7 +118,10 @@ private class ZoomableMarkdownTextView(
         currentFontScale = gestureFontScale
         scaleCallback = onFontScaleChange
         textSize = 16f * fontScale
-        setLineSpacing(0f, lineHeightScale.coerceIn(0.85f, 1.8f))
+        val safeLineHeight = lineHeightScale
+            .coerceIn(0.85f, 1.8f)
+            .coerceAtLeast(if (fontScale >= 1.35f) 1.12f else 1f)
+        setLineSpacing(0f, safeLineHeight)
         setTextColor(textColor)
         setHintTextColor(hintColor)
         setLinkTextColor(linkColor)
@@ -127,7 +133,7 @@ private class ZoomableMarkdownTextView(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        val scaleHandled = scaleDetector.onTouchEvent(event)
+        scaleDetector.onTouchEvent(event)
         if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
             parent?.requestDisallowInterceptTouchEvent(false)
         }
@@ -135,7 +141,7 @@ private class ZoomableMarkdownTextView(
             parent?.requestDisallowInterceptTouchEvent(true)
             return true
         }
-        return if (scaleHandled) true else super.onTouchEvent(event)
+        return super.onTouchEvent(event)
     }
 }
 

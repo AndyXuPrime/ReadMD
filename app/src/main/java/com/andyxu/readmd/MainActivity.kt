@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.andyxu.readmd.data.DocumentState
+import com.andyxu.readmd.data.ReaderSettings
 import com.andyxu.readmd.data.RecentFile
 import com.andyxu.readmd.file.OpenMarkdownDocument
 import com.andyxu.readmd.markdown.MarkdownPreview
@@ -168,7 +169,7 @@ private fun ReadMDAppShell(
             onEnterEdit = viewModel::enterEditMode,
             onReturnToReading = viewModel::previewDraft,
             onDraftChange = viewModel::updateDraft,
-            onFontScaleChange = viewModel::setFontScale,
+            onReadingFontScaleChange = viewModel::setReadingFontScale,
         )
     } else {
         ReadMDHomeScreen(
@@ -330,7 +331,7 @@ private fun ReadMDDocumentScreen(
     onEnterEdit: () -> Unit,
     onReturnToReading: () -> Unit,
     onDraftChange: (String) -> Unit,
-    onFontScaleChange: (Float) -> Unit,
+    onReadingFontScaleChange: (Float) -> Unit,
 ) {
     val elderMode = state.settings.elderMode
     val textScale = uiTextScale(elderMode, state.settings.fontScale)
@@ -403,7 +404,7 @@ private fun ReadMDDocumentScreen(
                     .padding(innerPadding)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 onEnterEdit = onEnterEdit,
-                onFontScaleChange = onFontScaleChange,
+                onReadingFontScaleChange = onReadingFontScaleChange,
             )
         }
     }
@@ -417,14 +418,16 @@ private fun ReadMDReadingMode(
     textScale: Float,
     modifier: Modifier = Modifier,
     onEnterEdit: () -> Unit,
-    onFontScaleChange: (Float) -> Unit,
+    onReadingFontScaleChange: (Float) -> Unit,
 ) {
     val elderMode = state.settings.elderMode
+    val readingTextScale = (textScale * state.readingFontScale)
+        .coerceIn(ReaderSettings.MIN_FONT_SCALE, ReaderSettings.MAX_FONT_SCALE)
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(spacing),
     ) {
-        val previewScalePercent = (state.settings.fontScale * 100).roundToInt()
+        val previewScalePercent = (readingTextScale * 100).roundToInt()
         Text(
             text = state.displayName,
             fontSize = appTextSize(elderMode, state.settings.fontScale, 20.sp),
@@ -462,10 +465,10 @@ private fun ReadMDReadingMode(
             } else {
                 MarkdownPreview(
                     content = previewContent,
-                    fontScale = textScale,
+                    fontScale = readingTextScale,
                     lineHeightScale = state.settings.lineHeightScale,
-                    gestureFontScale = state.settings.fontScale,
-                    onFontScaleChange = onFontScaleChange,
+                    gestureFontScale = state.readingFontScale,
+                    onFontScaleChange = onReadingFontScaleChange,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 18.dp, vertical = 16.dp),
@@ -586,13 +589,13 @@ private fun ReadMDSettingsSheet(
             Slider(
                 value = fontScale,
                 onValueChange = onFontScaleChange,
-                valueRange = 0.85f..1.8f,
+                valueRange = ReaderSettings.MIN_FONT_SCALE..ReaderSettings.MAX_FONT_SCALE,
             )
             Text("行距", fontSize = 17.sp * fontScale, fontWeight = FontWeight.Medium)
             Slider(
                 value = lineHeightScale,
                 onValueChange = onLineHeightChange,
-                valueRange = 0.85f..1.8f,
+                valueRange = ReaderSettings.MIN_LINE_HEIGHT_SCALE..ReaderSettings.MAX_LINE_HEIGHT_SCALE,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp * lineHeightScale)) {
                 ActionButton(

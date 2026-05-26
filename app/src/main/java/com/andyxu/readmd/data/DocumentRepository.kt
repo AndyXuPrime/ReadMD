@@ -130,8 +130,10 @@ class DocumentRepository(private val context: Context) {
         return ReaderSettings(
             elderMode = prefs.getBoolean(KEY_ELDER_MODE, false),
             darkMode = prefs.getBoolean(KEY_DARK_MODE, false),
-            fontScale = prefs.getFloat(KEY_FONT_SCALE, 1f),
-            lineHeightScale = prefs.getFloat(KEY_LINE_HEIGHT_SCALE, 1f),
+            fontScale = prefs.getFloat(KEY_FONT_SCALE, 1f)
+                .coerceIn(ReaderSettings.MIN_FONT_SCALE, ReaderSettings.MAX_FONT_SCALE),
+            lineHeightScale = prefs.getFloat(KEY_LINE_HEIGHT_SCALE, 1f)
+                .coerceIn(ReaderSettings.MIN_LINE_HEIGHT_SCALE, ReaderSettings.MAX_LINE_HEIGHT_SCALE),
         )
     }
 
@@ -139,8 +141,17 @@ class DocumentRepository(private val context: Context) {
         prefs.edit()
             .putBoolean(KEY_ELDER_MODE, settings.elderMode)
             .putBoolean(KEY_DARK_MODE, settings.darkMode)
-            .putFloat(KEY_FONT_SCALE, settings.fontScale)
-            .putFloat(KEY_LINE_HEIGHT_SCALE, settings.lineHeightScale)
+            .putFloat(
+                KEY_FONT_SCALE,
+                settings.fontScale.coerceIn(ReaderSettings.MIN_FONT_SCALE, ReaderSettings.MAX_FONT_SCALE),
+            )
+            .putFloat(
+                KEY_LINE_HEIGHT_SCALE,
+                settings.lineHeightScale.coerceIn(
+                    ReaderSettings.MIN_LINE_HEIGHT_SCALE,
+                    ReaderSettings.MAX_LINE_HEIGHT_SCALE,
+                ),
+            )
             .apply()
     }
 

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.andyxu.readmd.data.DocumentRepository
 import com.andyxu.readmd.data.DocumentState
 import com.andyxu.readmd.data.DraftSnapshot
+import com.andyxu.readmd.data.ReaderSettings
 import com.andyxu.readmd.data.SaveTarget
 import com.andyxu.readmd.file.PickedDocument
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +60,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 draftUpdatedAt = restoredContent.updatedAt,
                 canWriteCurrentFile = restoredContent.canWriteCurrentFile,
                 settings = settings,
+                readingFontScale = 1f,
                 recentFiles = repository.recentFiles(),
                 message = "已恢复上次未保存草稿",
             )
@@ -68,6 +70,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
             }
             DocumentState(
                 settings = settings,
+                readingFontScale = 1f,
                 recentFiles = repository.recentFiles(),
             )
         }
@@ -92,6 +95,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 draftContent = initial,
                 previewContent = null,
                 isEditing = true,
+                readingFontScale = 1f,
                 hasUnsavedChanges = true,
                 draftUpdatedAt = System.currentTimeMillis(),
                 canWriteCurrentFile = false,
@@ -121,6 +125,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 draftContent = "",
                 previewContent = null,
                 isEditing = false,
+                readingFontScale = 1f,
                 hasUnsavedChanges = false,
                 draftUpdatedAt = null,
                 canWriteCurrentFile = false,
@@ -236,37 +241,76 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
     fun increaseFont() {
         _state.update {
             val settings = it.settings
-            it.copyAndSaveSettings(settings.copy(fontScale = (settings.fontScale + 0.1f).coerceAtMost(1.8f)))
+            it.copyAndSaveSettings(
+                settings.copy(
+                    fontScale = (settings.fontScale + 0.1f).coerceAtMost(ReaderSettings.MAX_FONT_SCALE),
+                ),
+            )
         }
     }
 
     fun decreaseFont() {
         _state.update {
             val settings = it.settings
-            it.copyAndSaveSettings(settings.copy(fontScale = (settings.fontScale - 0.1f).coerceAtLeast(0.85f)))
+            it.copyAndSaveSettings(
+                settings.copy(
+                    fontScale = (settings.fontScale - 0.1f).coerceAtLeast(ReaderSettings.MIN_FONT_SCALE),
+                ),
+            )
         }
     }
 
     fun increaseLineHeight() {
         _state.update {
             val settings = it.settings
-            it.copyAndSaveSettings(settings.copy(lineHeightScale = (settings.lineHeightScale + 0.1f).coerceAtMost(1.8f)))
+            it.copyAndSaveSettings(
+                settings.copy(
+                    lineHeightScale = (settings.lineHeightScale + 0.1f)
+                        .coerceAtMost(ReaderSettings.MAX_LINE_HEIGHT_SCALE),
+                ),
+            )
         }
     }
 
     fun decreaseLineHeight() {
         _state.update {
             val settings = it.settings
-            it.copyAndSaveSettings(settings.copy(lineHeightScale = (settings.lineHeightScale - 0.1f).coerceAtLeast(0.85f)))
+            it.copyAndSaveSettings(
+                settings.copy(
+                    lineHeightScale = (settings.lineHeightScale - 0.1f)
+                        .coerceAtLeast(ReaderSettings.MIN_LINE_HEIGHT_SCALE),
+                ),
+            )
         }
     }
 
     fun setFontScale(scale: Float) {
-        _state.update { it.copyAndSaveSettings(it.settings.copy(fontScale = scale.coerceIn(0.85f, 1.8f))) }
+        _state.update {
+            it.copyAndSaveSettings(
+                it.settings.copy(
+                    fontScale = scale.coerceIn(ReaderSettings.MIN_FONT_SCALE, ReaderSettings.MAX_FONT_SCALE),
+                ),
+            )
+        }
     }
 
     fun setLineHeightScale(scale: Float) {
-        _state.update { it.copyAndSaveSettings(it.settings.copy(lineHeightScale = scale.coerceIn(0.85f, 1.8f))) }
+        _state.update {
+            it.copyAndSaveSettings(
+                it.settings.copy(
+                    lineHeightScale = scale.coerceIn(
+                        ReaderSettings.MIN_LINE_HEIGHT_SCALE,
+                        ReaderSettings.MAX_LINE_HEIGHT_SCALE,
+                    ),
+                ),
+            )
+        }
+    }
+
+    fun setReadingFontScale(scale: Float) {
+        _state.update {
+            it.copy(readingFontScale = scale.coerceIn(ReaderSettings.MIN_FONT_SCALE, ReaderSettings.MAX_FONT_SCALE))
+        }
     }
 
     fun updateSearch(query: String) {
@@ -308,6 +352,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                         draftContent = document.content,
                         previewContent = null,
                         isEditing = false,
+                        readingFontScale = 1f,
                         hasUnsavedChanges = false,
                         draftUpdatedAt = null,
                         isLoading = false,
@@ -363,6 +408,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                             draftContent = savedContent,
                             previewContent = null,
                             isEditing = false,
+                            readingFontScale = 1f,
                             hasUnsavedChanges = false,
                             draftUpdatedAt = null,
                             canWriteCurrentFile = canWrite,
@@ -400,9 +446,16 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun DocumentState.copyAndSaveSettings(settings: com.andyxu.readmd.data.ReaderSettings): DocumentState {
-        repository.saveReaderSettings(settings)
-        return copy(settings = settings)
+    private fun DocumentState.copyAndSaveSettings(settings: ReaderSettings): DocumentState {
+        val safeSettings = settings.copy(
+            fontScale = settings.fontScale.coerceIn(ReaderSettings.MIN_FONT_SCALE, ReaderSettings.MAX_FONT_SCALE),
+            lineHeightScale = settings.lineHeightScale.coerceIn(
+                ReaderSettings.MIN_LINE_HEIGHT_SCALE,
+                ReaderSettings.MAX_LINE_HEIGHT_SCALE,
+            ),
+        )
+        repository.saveReaderSettings(safeSettings)
+        return copy(settings = safeSettings)
     }
 
     private fun saveCurrentDraft() {
