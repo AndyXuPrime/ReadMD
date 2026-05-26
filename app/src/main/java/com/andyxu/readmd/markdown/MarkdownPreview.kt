@@ -13,14 +13,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.material3.MaterialTheme
 import io.noties.markwon.Markwon
+import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
 import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.ext.tasklist.TaskListPlugin
 import io.noties.markwon.html.HtmlPlugin
+import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
+import kotlin.math.roundToInt
 
 private const val MAX_PREVIEW_CHARS = 120_000
 private const val MIN_READING_FONT_SCALE = 0.85f
 private const val MAX_READING_FONT_SCALE = 1.55f
+private const val LATEX_SCALE_BUCKET = 0.05f
 
 @Composable
 fun MarkdownPreview(
@@ -33,11 +37,15 @@ fun MarkdownPreview(
 ) {
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
-    val markwon = remember(context) {
+    val markwon = remember(context, fontScale) {
         Markwon.builder(context)
+            .usePlugin(MarkwonInlineParserPlugin.create())
             .usePlugin(StrikethroughPlugin.create())
             .usePlugin(TablePlugin.create(context))
             .usePlugin(TaskListPlugin.create(context))
+            .usePlugin(JLatexMathPlugin.create(16f * fontScale) { builder ->
+                builder.inlinesEnabled(true)
+            })
             .usePlugin(HtmlPlugin.create())
             .build()
     }
@@ -69,6 +77,7 @@ private class ZoomableMarkdownTextView(
     context: Context,
 ) : TextView(context) {
     private var renderedMarkdown: String? = null
+    private var renderedLatexScaleBucket: Int? = null
     private var currentFontScale: Float = 1f
     private var scaleCallback: ((Float) -> Unit)? = null
     private val scaleDetector = ScaleGestureDetector(
@@ -126,9 +135,15 @@ private class ZoomableMarkdownTextView(
         setHintTextColor(hintColor)
         setLinkTextColor(linkColor)
         setBackgroundColor(backgroundColor)
-        if (renderedMarkdown != markdown) {
+        val latexScaleBucket = if (containsLatexMath(markdown)) {
+            (fontScale / LATEX_SCALE_BUCKET).roundToInt()
+        } else {
+            null
+        }
+        if (renderedMarkdown != markdown || renderedLatexScaleBucket != latexScaleBucket) {
             markwon.setMarkdown(this, markdown)
             renderedMarkdown = markdown
+            renderedLatexScaleBucket = latexScaleBucket
         }
     }
 
@@ -156,6 +171,12 @@ fun sanitizeMarkdownText(content: String): String {
         .replace("\u0000", "")
         .replace("\r\n", "\n")
         .replace("\r", "\n")
+}
+
+fun containsLatexMath(content: String): Boolean {
+    if (content.contains("$$")) return true
+    if (content.contains("\\[") || content.contains("\\(")) return true
+    return Regex("""(^|[^\\])\$[^$\n]+\$""").containsMatchIn(content)
 }
 
 fun countSearchMatches(content: String, query: String): Int {

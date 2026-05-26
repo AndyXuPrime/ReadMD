@@ -1,13 +1,6 @@
 # ReadMD
 
-<div align="center">
 
-**如果这个项目对你有帮助，请给我们一个 ⭐️**
-
-[![GitHub stars](https://img.shields.io/github/stars/AndyXuPrime/ReadMD?style=social)](https://github.com/AndyXuPrime/ReadMD)
-[![GitHub forks](https://img.shields.io/github/forks/AndyXuPrime/ReadMD?style=social)](https://github.com/AndyXuPrime/ReadMD)
-
-</div>
 
 一款面向 Android 的本地 Markdown 备忘录应用，主打“阅读优先”的打开、浏览、编辑和保存体验，适合快速查看和修改手机里的 Markdown 内容。
 
@@ -37,7 +30,7 @@ ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点
 - 使用系统文件选择器接入本地文件，不主动扫描整个手机存储。
 - 支持草稿自动恢复，避免新建或编辑中断后内容丢失。
 - 阅读页支持局部双指缩放字号，便于按阅读习惯临时放大或缩小，不会同步影响首页布局。
-- Markdown 预览基于成熟渲染方案实现，覆盖常见标题、列表、任务列表、代码块和表格展示。
+- Markdown 预览基于成熟渲染方案实现，覆盖常见标题、列表、任务列表、代码块、表格和常用 LaTeX 数学公式展示。
 
 ## 技术实现
 
@@ -75,6 +68,7 @@ ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点
 - 大字模式、字号和行距调整
 - 日间/夜间模式切换
 - 阅读页局部双指缩放字号
+- 常用 LaTeX 数学公式预览
 - 系统返回手势支持编辑页返回阅读页、阅读页返回首页
 - 设置持久化
 - 自动草稿保护
@@ -98,3 +92,11 @@ app/build/outputs/apk/debug/app-debug.apk
 
 下一阶段将继续打磨真机阅读体验、兼容性测试、Release APK 和发布流程。
 
+<div align="center">
+
+**如果这个项目对你有帮助，请给我们一个 ⭐️**
+
+[![GitHub stars](https://img.shields.io/github/stars/AndyXuPrime/ReadMD?style=social)](https://github.com/AndyXuPrime/ReadMD)
+[![GitHub forks](https://img.shields.io/github/forks/AndyXuPrime/ReadMD?style=social)](https://github.com/AndyXuPrime/ReadMD)
+
+</div>

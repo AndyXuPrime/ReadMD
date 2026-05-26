@@ -53,9 +53,11 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.markwon.core)
+    implementation(libs.markwon.inline.parser)
     implementation(libs.markwon.ext.strikethrough)
     implementation(libs.markwon.ext.tables)
     implementation(libs.markwon.ext.tasklist)
+    implementation(libs.markwon.ext.latex)
     implementation(libs.markwon.html)
 
     testImplementation(libs.junit)
