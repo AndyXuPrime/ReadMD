@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import java.io.File
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
@@ -15,7 +17,8 @@ import org.json.JSONObject
 
 class DocumentRepository(private val context: Context) {
     private companion object {
-        const val DEFAULT_MAX_READ_BYTES = 8L * 1024L * 1024L
+        const val DEFAULT_MAX_READ_BYTES = 2L * 1024L * 1024L
+        const val MAX_RECENT_FILES = 20
         const val KEY_RECENT_FILES = "recent_files"
         const val KEY_ELDER_MODE = "elder_mode"
         const val KEY_DARK_MODE = "dark_mode"
@@ -34,6 +37,12 @@ class DocumentRepository(private val context: Context) {
             )
         if (supportedFlags != 0) {
             runCatching { resolver.takePersistableUriPermission(uri, supportedFlags) }
+            if (supportedFlags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0) {
+                runCatching { resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            }
+            if (supportedFlags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION != 0) {
+                runCatching { resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+            }
         }
     }
 
@@ -56,6 +65,10 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
+    fun mimeType(uri: Uri): String? {
+        return resolver.getType(uri)
+    }
+
     fun readText(uri: Uri, maxBytes: Long = DEFAULT_MAX_READ_BYTES): String {
         resolver.openInputStream(uri).use { input ->
             requireNotNull(input) { "无法打开文件输入流" }
@@ -74,7 +87,9 @@ class DocumentRepository(private val context: Context) {
 
     fun canWrite(uri: Uri): Boolean {
         val persisted = resolver.persistedUriPermissions.firstOrNull { it.uri == uri }
-        return persisted?.isWritePermission == true
+        if (persisted?.isWritePermission == true) return true
+        if (uri.scheme == "file") return uri.path?.let { File(it).canWrite() } == true
+        return documentSupportsWrite(uri)
     }
 
     fun rememberRecentFile(uri: Uri, displayName: String, canWrite: Boolean) {
@@ -98,7 +113,7 @@ class DocumentRepository(private val context: Context) {
                 previewSnippet = sanitizeText(previewSnippet),
             ),
         )
-        saveRecentFiles(current.take(10))
+        saveRecentFiles(current.take(MAX_RECENT_FILES))
     }
 
     fun recentFiles(): List<RecentFile> {
@@ -228,6 +243,28 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
+    private fun documentSupportsWrite(uri: Uri): Boolean {
+        var cursor: Cursor? = null
+        return try {
+            cursor = resolver.query(uri, arrayOf(DocumentsContract.Document.COLUMN_FLAGS), null, null, null)
+            if (cursor != null && cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_FLAGS)
+                if (index >= 0 && !cursor.isNull(index)) {
+                    val flags = cursor.getInt(index)
+                    flags and DocumentsContract.Document.FLAG_SUPPORTS_WRITE != 0
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } catch (_: Exception) {
+            false
+        } finally {
+            cursor?.close()
+        }
+    }
+
     private fun readAllBytesLimited(input: java.io.InputStream, maxBytes: Long): ByteArray {
         val buffer = ByteArrayOutputStream()
         val chunk = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -237,7 +274,7 @@ class DocumentRepository(private val context: Context) {
             if (read <= 0) break
             total += read
             if (total > maxBytes) {
-                throw IllegalStateException("文件过大，建议拆分后再打开")
+                throw IllegalStateException("文件超过 2MB，建议拆分后再打开")
             }
             buffer.write(chunk, 0, read)
         }

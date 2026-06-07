@@ -22,6 +22,7 @@ class OpenMarkdownDocument : ActivityResultContract<Unit, PickedDocument?>() {
                     "text/markdown",
                     "text/x-markdown",
                     "text/plain",
+                    "application/vnd.text",
                     "application/octet-stream",
                 ),
             )

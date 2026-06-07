@@ -1,6 +1,7 @@
 package com.andyxu.readmd
 
 import android.app.Application
+import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,6 +11,8 @@ import com.andyxu.readmd.data.DraftSnapshot
 import com.andyxu.readmd.data.ReaderSettings
 import com.andyxu.readmd.data.SaveTarget
 import com.andyxu.readmd.file.PickedDocument
+import com.andyxu.readmd.file.isSupportedReadMDDocument
+import com.andyxu.readmd.file.suggestedReadMDFileName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +22,7 @@ import kotlinx.coroutines.withContext
 
 class ReadMDViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
-        const val MAX_OPEN_BYTES = 8L * 1024L * 1024L
+        const val MAX_OPEN_BYTES = 2L * 1024L * 1024L
     }
 
     private data class OpenedDocumentResult(
@@ -78,7 +81,10 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
 
     fun openPickedDocument(document: PickedDocument) {
         repository.persistUriPermission(document.uri, document.grantFlags)
-        openUri(document.uri)
+        openUri(
+            uri = document.uri,
+            hasWriteGrant = document.grantFlags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION != 0,
+        )
     }
 
     fun openRecentFile(uriText: String) {
@@ -326,18 +332,22 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
         _state.update { it.copy(message = null) }
     }
 
-    private fun openUri(uri: Uri) {
+    private fun openUri(uri: Uri, hasWriteGrant: Boolean = false) {
         _state.update { it.copy(isLoading = true, message = null) }
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val name = repository.displayName(uri)
+                    val mimeType = repository.mimeType(uri)
+                    if (!isSupportedReadMDDocument(name, mimeType)) {
+                        throw IllegalStateException("当前仅支持打开 .md、.markdown 或 .txt 文件")
+                    }
                     val size = repository.fileSize(uri)
                     if (size != null && size > MAX_OPEN_BYTES) {
-                        throw IllegalStateException("文件过大，建议拆分后再打开")
+                        throw IllegalStateException("文件超过 2MB，建议拆分后再打开")
                     }
                     val content = repository.sanitizeText(repository.readText(uri))
-                    val canWrite = repository.canWrite(uri)
+                    val canWrite = hasWriteGrant || repository.canWrite(uri)
                     val snippet = repository.buildPreviewSnippet(content)
                     repository.rememberRecentFile(uri, name, canWrite, snippet)
                     OpenedDocumentResult(name, content, canWrite, snippet)
@@ -439,11 +449,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
 
     fun suggestedFileName(): String {
         val name = _state.value.displayName.ifBlank { "ReadMD-${System.currentTimeMillis()}.md" }
-        return if (name.endsWith(".md", ignoreCase = true) || name.endsWith(".markdown", ignoreCase = true)) {
-            name
-        } else {
-            "$name.md"
-        }
+        return suggestedReadMDFileName(name)
     }
 
     private fun DocumentState.copyAndSaveSettings(settings: ReaderSettings): DocumentState {
