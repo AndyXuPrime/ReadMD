@@ -9,6 +9,7 @@
 ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点覆盖下面几件事：
 
 - 通过 Android 系统文件选择器打开本地 `.md`、`.markdown` 和 `.txt` 文件
+- 拒绝读取 PDF、图片、压缩包等非文本笔记格式，降低误读二进制文件的风险
 - 先阅读、后编辑，减少页面切换和误操作
 - 本地修改并保存 Markdown 原文
 - 支持适老化大字模式、夜间模式、行距调整
@@ -65,6 +66,7 @@ ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点
 - 新建备忘录
 - 最近打开文件
 - 首页最近文件搜索
+- 最近笔记最多保留 20 条
 - 大字模式、字号和行距调整
 - 日间/夜间模式切换
 - 阅读页局部双指缩放字号
@@ -90,7 +92,13 @@ Debug APK 构建产物：
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-下一阶段将继续打磨真机阅读体验、兼容性测试、Release APK 和发布流程。
+未签名 Release APK 构建产物：
+
+```text
+app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+下一阶段将继续打磨真机阅读体验、兼容性测试、正式签名和发布流程。
 
 <div align="center">
 

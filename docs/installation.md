@@ -34,6 +34,24 @@ app/build/outputs/apk/debug/app-debug.apk
 
 当前正式 Release APK 尚未发布。后续如果配置 GitHub Releases，正式下载入口会优先放在项目 README 和 Releases 页面中。
 
+当前也可以生成未签名 Release APK，用于观察正式包体积：
+
+```powershell
+.\gradlew.bat :app:assembleRelease
+```
+
+生成位置：
+
+```text
+app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+说明：
+
+- `app-release-unsigned.apk` 未正式签名，通常不能直接作为公开安装包分发。
+- Release 包已启用 R8 代码压缩和资源压缩，体积会明显小于 Debug APK。
+- 真正发布前仍需要配置正式签名证书。
+
 ## 3. 从源码构建 Debug APK
 
 这一部分更适合开发者或希望自己编译 APK 的用户。
@@ -146,7 +164,6 @@ D:\AndroidDevelop\AndroidSdk\cmdline-tools\latest\bin
 
 后续可以增加：
 
-- Release 构建配置
 - 正式签名
 - GitHub Releases 自动上传 APK
 - 版本更新说明
