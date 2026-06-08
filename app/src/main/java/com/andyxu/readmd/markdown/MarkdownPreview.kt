@@ -32,7 +32,9 @@ fun MarkdownPreview(
     fontScale: Float,
     lineHeightScale: Float,
     gestureFontScale: Float = fontScale,
+    scrollFraction: Float = 0f,
     onFontScaleChange: ((Float) -> Unit)? = null,
+    onScrollFractionChange: ((Float) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -63,11 +65,13 @@ fun MarkdownPreview(
                 fontScale = fontScale,
                 gestureFontScale = gestureFontScale,
                 lineHeightScale = lineHeightScale,
+                targetScrollFraction = scrollFraction,
                 textColor = colors.onSurface.toArgb(),
                 hintColor = colors.onSurfaceVariant.toArgb(),
                 linkColor = colors.primary.toArgb(),
                 backgroundColor = colors.surface.toArgb(),
                 onFontScaleChange = onFontScaleChange,
+                onScrollFractionChange = onScrollFractionChange,
             )
         },
     )
@@ -80,6 +84,9 @@ private class ZoomableMarkdownTextView(
     private var renderedLatexScaleBucket: Int? = null
     private var currentFontScale: Float = 1f
     private var scaleCallback: ((Float) -> Unit)? = null
+    private var scrollCallback: ((Float) -> Unit)? = null
+    private var requestedScrollFraction: Float = 0f
+    private var applyingRequestedScroll = false
     private val scaleDetector = ScaleGestureDetector(
         context,
         object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -118,14 +125,17 @@ private class ZoomableMarkdownTextView(
         fontScale: Float,
         gestureFontScale: Float,
         lineHeightScale: Float,
+        targetScrollFraction: Float,
         textColor: Int,
         hintColor: Int,
         linkColor: Int,
         backgroundColor: Int,
         onFontScaleChange: ((Float) -> Unit)?,
+        onScrollFractionChange: ((Float) -> Unit)?,
     ) {
         currentFontScale = gestureFontScale
         scaleCallback = onFontScaleChange
+        scrollCallback = onScrollFractionChange
         textSize = 16f * fontScale
         val safeLineHeight = lineHeightScale
             .coerceIn(0.85f, 1.8f)
@@ -145,6 +155,10 @@ private class ZoomableMarkdownTextView(
             renderedMarkdown = markdown
             renderedLatexScaleBucket = latexScaleBucket
         }
+        if (kotlin.math.abs(targetScrollFraction - requestedScrollFraction) >= 0.005f) {
+            requestedScrollFraction = targetScrollFraction.coerceIn(0f, 1f)
+            applyRequestedScrollFraction()
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -157,6 +171,41 @@ private class ZoomableMarkdownTextView(
             return true
         }
         return super.onTouchEvent(event)
+    }
+
+    override fun onScrollChanged(left: Int, top: Int, oldLeft: Int, oldTop: Int) {
+        super.onScrollChanged(left, top, oldLeft, oldTop)
+        if (!applyingRequestedScroll) {
+            scrollCallback?.invoke(currentScrollFraction())
+        }
+    }
+
+    private fun applyRequestedScrollFraction() {
+        post {
+            val maxScroll = maxVerticalScroll()
+            if (maxScroll <= 0) {
+                scrollCallback?.invoke(0f)
+                return@post
+            }
+            val targetY = (maxScroll * requestedScrollFraction).roundToInt()
+            if (kotlin.math.abs(scrollY - targetY) > 1) {
+                applyingRequestedScroll = true
+                scrollTo(0, targetY)
+                applyingRequestedScroll = false
+            }
+            scrollCallback?.invoke(currentScrollFraction())
+        }
+    }
+
+    private fun currentScrollFraction(): Float {
+        val maxScroll = maxVerticalScroll()
+        return if (maxScroll <= 0) 0f else (scrollY.toFloat() / maxScroll).coerceIn(0f, 1f)
+    }
+
+    private fun maxVerticalScroll(): Int {
+        val contentHeight = layout?.height ?: 0
+        val viewportHeight = height - compoundPaddingTop - compoundPaddingBottom
+        return (contentHeight - viewportHeight).coerceAtLeast(0)
     }
 }
 

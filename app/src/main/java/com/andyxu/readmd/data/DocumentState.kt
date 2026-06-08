@@ -55,6 +55,8 @@ data class DocumentState(
     val searchQuery: String = "",
     val settings: ReaderSettings = ReaderSettings(),
     val readingFontScale: Float = 1f,
+    val readingScrollFraction: Float = 0f,
+    val pendingEditScrollFraction: Float? = null,
     val recentFiles: List<RecentFile> = emptyList(),
     val pendingSaveTarget: SaveTarget? = null,
 ) {

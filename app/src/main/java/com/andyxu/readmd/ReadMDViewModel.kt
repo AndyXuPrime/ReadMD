@@ -64,6 +64,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 canWriteCurrentFile = restoredContent.canWriteCurrentFile,
                 settings = settings,
                 readingFontScale = 1f,
+                readingScrollFraction = 0f,
                 recentFiles = repository.recentFiles(),
                 message = "已恢复上次未保存草稿",
             )
@@ -74,6 +75,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
             DocumentState(
                 settings = settings,
                 readingFontScale = 1f,
+                readingScrollFraction = 0f,
                 recentFiles = repository.recentFiles(),
             )
         }
@@ -102,6 +104,8 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 previewContent = null,
                 isEditing = true,
                 readingFontScale = 1f,
+                readingScrollFraction = 0f,
+                pendingEditScrollFraction = null,
                 hasUnsavedChanges = true,
                 draftUpdatedAt = System.currentTimeMillis(),
                 canWriteCurrentFile = false,
@@ -132,6 +136,8 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 previewContent = null,
                 isEditing = false,
                 readingFontScale = 1f,
+                readingScrollFraction = 0f,
+                pendingEditScrollFraction = null,
                 hasUnsavedChanges = false,
                 draftUpdatedAt = null,
                 canWriteCurrentFile = false,
@@ -199,6 +205,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 isEditing = true,
                 draftContent = it.previewContent ?: it.content,
                 previewContent = null,
+                pendingEditScrollFraction = it.readingScrollFraction,
                 message = null,
             )
         }
@@ -212,6 +219,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 isEditing = false,
                 hasUnsavedChanges = hasUnsaved,
                 draftUpdatedAt = if (hasUnsaved) System.currentTimeMillis() else null,
+                pendingEditScrollFraction = null,
                 message = if (showMessage && hasUnsaved) "正在预览未保存内容" else null,
             )
         }
@@ -226,6 +234,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 isEditing = false,
                 hasUnsavedChanges = false,
                 draftUpdatedAt = null,
+                pendingEditScrollFraction = null,
                 message = "已放弃未保存修改",
             )
         }
@@ -319,6 +328,23 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun setReadingScrollFraction(fraction: Float) {
+        _state.update {
+            val safeFraction = fraction.coerceIn(0f, 1f)
+            if (kotlin.math.abs(it.readingScrollFraction - safeFraction) < 0.003f) {
+                it
+            } else {
+                it.copy(readingScrollFraction = safeFraction)
+            }
+        }
+    }
+
+    fun clearPendingEditScrollFraction() {
+        _state.update {
+            it.copy(pendingEditScrollFraction = null)
+        }
+    }
+
     fun updateSearch(query: String) {
         _state.update { it.copy(searchQuery = query) }
     }
@@ -363,6 +389,8 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                         previewContent = null,
                         isEditing = false,
                         readingFontScale = 1f,
+                        readingScrollFraction = 0f,
+                        pendingEditScrollFraction = null,
                         hasUnsavedChanges = false,
                         draftUpdatedAt = null,
                         isLoading = false,
@@ -419,6 +447,8 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                             previewContent = null,
                             isEditing = false,
                             readingFontScale = 1f,
+                            readingScrollFraction = 0f,
+                            pendingEditScrollFraction = null,
                             hasUnsavedChanges = false,
                             draftUpdatedAt = null,
                             canWriteCurrentFile = canWrite,

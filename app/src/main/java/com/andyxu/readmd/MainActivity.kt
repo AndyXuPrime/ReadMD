@@ -55,9 +55,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -170,6 +172,8 @@ private fun ReadMDAppShell(
             onReturnToReading = viewModel::previewDraft,
             onDraftChange = viewModel::updateDraft,
             onReadingFontScaleChange = viewModel::setReadingFontScale,
+            onReadingScrollFractionChange = viewModel::setReadingScrollFraction,
+            onEditScrollApplied = viewModel::clearPendingEditScrollFraction,
         )
     } else {
         ReadMDHomeScreen(
@@ -332,6 +336,8 @@ private fun ReadMDDocumentScreen(
     onReturnToReading: () -> Unit,
     onDraftChange: (String) -> Unit,
     onReadingFontScaleChange: (Float) -> Unit,
+    onReadingScrollFractionChange: (Float) -> Unit,
+    onEditScrollApplied: () -> Unit,
 ) {
     val elderMode = state.settings.elderMode
     val textScale = uiTextScale(elderMode, state.settings.fontScale)
@@ -392,6 +398,7 @@ private fun ReadMDDocumentScreen(
                 onSaveAs = onSaveAs,
                 onExport = onExport,
                 onDraftChange = onDraftChange,
+                onEditScrollApplied = onEditScrollApplied,
             )
         } else {
             ReadMDReadingMode(
@@ -405,6 +412,7 @@ private fun ReadMDDocumentScreen(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 onEnterEdit = onEnterEdit,
                 onReadingFontScaleChange = onReadingFontScaleChange,
+                onReadingScrollFractionChange = onReadingScrollFractionChange,
             )
         }
     }
@@ -419,6 +427,7 @@ private fun ReadMDReadingMode(
     modifier: Modifier = Modifier,
     onEnterEdit: () -> Unit,
     onReadingFontScaleChange: (Float) -> Unit,
+    onReadingScrollFractionChange: (Float) -> Unit,
 ) {
     val elderMode = state.settings.elderMode
     val readingTextScale = (textScale * state.readingFontScale)
@@ -436,11 +445,17 @@ private fun ReadMDReadingMode(
             textAlign = TextAlign.Center,
         )
         Text(
-            text = "阅读字号 ${previewScalePercent}% · 可双指缩放",
+            text = "阅读字号 ${previewScalePercent}% · 位置 ${(state.readingScrollFraction * 100).roundToInt()}%",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = appTextSize(elderMode, state.settings.fontScale, 13.sp),
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
+        )
+        Slider(
+            value = state.readingScrollFraction.coerceIn(0f, 1f),
+            onValueChange = onReadingScrollFractionChange,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = previewContent.isNotBlank(),
         )
         Card(
             modifier = Modifier.weight(1f),
@@ -468,7 +483,9 @@ private fun ReadMDReadingMode(
                     fontScale = readingTextScale,
                     lineHeightScale = state.settings.lineHeightScale,
                     gestureFontScale = state.readingFontScale,
+                    scrollFraction = state.readingScrollFraction,
                     onFontScaleChange = onReadingFontScaleChange,
+                    onScrollFractionChange = onReadingScrollFractionChange,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 18.dp, vertical = 16.dp),
@@ -495,8 +512,24 @@ private fun ReadMDEditMode(
     onSaveAs: () -> Unit,
     onExport: () -> Unit,
     onDraftChange: (String) -> Unit,
+    onEditScrollApplied: () -> Unit,
 ) {
     val elderMode = state.settings.elderMode
+    var editValue by remember(state.currentUri, state.displayName) {
+        mutableStateOf(TextFieldValue(state.draftContent))
+    }
+    LaunchedEffect(state.draftContent) {
+        if (state.draftContent != editValue.text) {
+            val safeSelection = editValue.selection.start.coerceIn(0, state.draftContent.length)
+            editValue = TextFieldValue(state.draftContent, selection = TextRange(safeSelection))
+        }
+    }
+    LaunchedEffect(state.pendingEditScrollFraction, state.draftContent) {
+        val targetFraction = state.pendingEditScrollFraction ?: return@LaunchedEffect
+        val targetOffset = approximateTextOffsetForFraction(state.draftContent, targetFraction)
+        editValue = TextFieldValue(state.draftContent, selection = TextRange(targetOffset))
+        onEditScrollApplied()
+    }
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(spacing),
@@ -533,8 +566,13 @@ private fun ReadMDEditMode(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
         ) {
             OutlinedTextField(
-                value = state.draftContent,
-                onValueChange = onDraftChange,
+                value = editValue,
+                onValueChange = { value ->
+                    editValue = value
+                    if (value.text != state.draftContent) {
+                        onDraftChange(value.text)
+                    }
+                },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
@@ -771,6 +809,15 @@ private fun uiTextScale(elderMode: Boolean, fontScale: Float): Float {
 private fun uiSpacing(lineHeightScale: Float, elderMode: Boolean): Dp {
     val base = if (elderMode) 14.dp else 12.dp
     return base * lineHeightScale
+}
+
+private fun approximateTextOffsetForFraction(text: String, fraction: Float): Int {
+    if (text.isBlank()) return 0
+    val roughOffset = (text.length * fraction.coerceIn(0f, 1f)).roundToInt()
+    if (roughOffset <= 0) return 0
+    if (roughOffset >= text.length) return text.length
+    val previousBreak = text.lastIndexOf('\n', startIndex = roughOffset).takeIf { it >= 0 } ?: 0
+    return if (previousBreak == 0) roughOffset else (previousBreak + 1).coerceAtMost(text.length)
 }
 
 @Preview(showBackground = true)
