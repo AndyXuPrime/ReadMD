@@ -11,11 +11,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -25,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,7 +58,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -445,17 +454,11 @@ private fun ReadMDReadingMode(
             textAlign = TextAlign.Center,
         )
         Text(
-            text = "阅读字号 ${previewScalePercent}% · 位置 ${(state.readingScrollFraction * 100).roundToInt()}%",
+            text = "阅读字号 ${previewScalePercent}% · 可双指缩放",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = appTextSize(elderMode, state.settings.fontScale, 13.sp),
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
-        )
-        Slider(
-            value = state.readingScrollFraction.coerceIn(0f, 1f),
-            onValueChange = onReadingScrollFractionChange,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = previewContent.isNotBlank(),
         )
         Card(
             modifier = Modifier.weight(1f),
@@ -478,18 +481,29 @@ private fun ReadMDReadingMode(
                     )
                 }
             } else {
-                MarkdownPreview(
-                    content = previewContent,
-                    fontScale = readingTextScale,
-                    lineHeightScale = state.settings.lineHeightScale,
-                    gestureFontScale = state.readingFontScale,
-                    scrollFraction = state.readingScrollFraction,
-                    onFontScaleChange = onReadingFontScaleChange,
-                    onScrollFractionChange = onReadingScrollFractionChange,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 18.dp, vertical = 16.dp),
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    MarkdownPreview(
+                        content = previewContent,
+                        fontScale = readingTextScale,
+                        lineHeightScale = state.settings.lineHeightScale,
+                        gestureFontScale = state.readingFontScale,
+                        scrollFraction = state.readingScrollFraction,
+                        onFontScaleChange = onReadingFontScaleChange,
+                        onScrollFractionChange = onReadingScrollFractionChange,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 18.dp, vertical = 16.dp),
+                    )
+                    ReadingPositionBar(
+                        fraction = state.readingScrollFraction,
+                        onFractionChange = onReadingScrollFractionChange,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .width(28.dp)
+                            .padding(vertical = 18.dp),
+                    )
+                }
             }
         }
         SecondaryActionButton(
@@ -499,6 +513,61 @@ private fun ReadMDReadingMode(
             modifier = Modifier.fillMaxWidth(),
             onClick = onEnterEdit,
         )
+    }
+}
+
+@Composable
+private fun ReadingPositionBar(
+    fraction: Float,
+    onFractionChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var isActive by remember { mutableStateOf(false) }
+    var heightPx by remember { mutableStateOf(1) }
+    val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isActive) 0.42f else 0.22f)
+    val thumbColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isActive) 0.92f else 0.36f)
+    val trackWidth = if (isActive) 10.dp else 3.dp
+    val thumbHeight = if (isActive) 42.dp else 26.dp
+
+    Box(
+        modifier = modifier
+            .onSizeChanged { size -> heightPx = size.height.coerceAtLeast(1) }
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { offset ->
+                        isActive = true
+                        onFractionChange((offset.y / heightPx).coerceIn(0f, 1f))
+                    },
+                    onDragEnd = { isActive = false },
+                    onDragCancel = { isActive = false },
+                    onDrag = { change, _ ->
+                        onFractionChange((change.position.y / heightPx).coerceIn(0f, 1f))
+                    },
+                )
+            },
+        contentAlignment = Alignment.CenterEnd,
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val trackWidthPx = trackWidth.toPx()
+            val thumbHeightPx = thumbHeight.toPx()
+            val centerX = size.width - trackWidthPx / 2f
+            val trackLeft = centerX - trackWidthPx / 2f
+            val corner = CornerRadius(trackWidthPx / 2f, trackWidthPx / 2f)
+            drawRoundRect(
+                color = trackColor,
+                topLeft = Offset(trackLeft, 0f),
+                size = Size(trackWidthPx, size.height),
+                cornerRadius = corner,
+            )
+            val thumbTop = ((size.height - thumbHeightPx) * fraction.coerceIn(0f, 1f))
+                .coerceIn(0f, (size.height - thumbHeightPx).coerceAtLeast(0f))
+            drawRoundRect(
+                color = thumbColor,
+                topLeft = Offset(trackLeft, thumbTop),
+                size = Size(trackWidthPx, thumbHeightPx.coerceAtMost(size.height)),
+                cornerRadius = corner,
+            )
+        }
     }
 }
 
