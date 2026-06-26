@@ -11,7 +11,10 @@ import com.andyxu.readmd.data.DraftSnapshot
 import com.andyxu.readmd.data.ReaderSettings
 import com.andyxu.readmd.data.SaveTarget
 import com.andyxu.readmd.file.PickedDocument
+import com.andyxu.readmd.file.isDocumentAccessDenied
 import com.andyxu.readmd.file.isSupportedReadMDDocument
+import com.andyxu.readmd.file.openDocumentMessage
+import com.andyxu.readmd.file.saveDocumentMessage
 import com.andyxu.readmd.file.suggestedReadMDFileName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,7 +93,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun openRecentFile(uriText: String) {
-        openUri(Uri.parse(uriText))
+        openUri(Uri.parse(uriText), forgetRecentOnAccessDenied = true)
     }
 
     fun newUnsavedDocument() {
@@ -358,7 +361,11 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
         _state.update { it.copy(message = null) }
     }
 
-    private fun openUri(uri: Uri, hasWriteGrant: Boolean = false) {
+    private fun openUri(
+        uri: Uri,
+        hasWriteGrant: Boolean = false,
+        forgetRecentOnAccessDenied: Boolean = false,
+    ) {
         _state.update { it.copy(isLoading = true, message = null) }
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -401,10 +408,14 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 repository.clearDraft()
             }.onFailure { error ->
+                if (forgetRecentOnAccessDenied && error.isDocumentAccessDenied()) {
+                    repository.forgetRecentFile(uri)
+                }
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        message = "无法打开文件：${error.message ?: "请重新选择"}",
+                        recentFiles = repository.recentFiles(),
+                        message = error.openDocumentMessage(),
                     )
                 }
             }
@@ -470,7 +481,7 @@ class ReadMDViewModel(application: Application) : AndroidViewModel(application) 
                 _state.update {
                     it.copy(
                         isLoading = false,
-                        message = "保存失败：${error.message ?: "请另存为新文件"}",
+                        message = error.saveDocumentMessage(),
                     )
                 }
             }

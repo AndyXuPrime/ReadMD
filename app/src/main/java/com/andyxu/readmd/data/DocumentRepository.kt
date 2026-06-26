@@ -141,6 +141,11 @@ class DocumentRepository(private val context: Context) {
         prefs.edit().remove(KEY_RECENT_FILES).apply()
     }
 
+    fun forgetRecentFile(uri: Uri) {
+        val remaining = recentFiles().filterNot { it.uri == uri.toString() }
+        saveRecentFiles(remaining)
+    }
+
     fun readerSettings(): ReaderSettings {
         return ReaderSettings(
             elderMode = prefs.getBoolean(KEY_ELDER_MODE, false),
