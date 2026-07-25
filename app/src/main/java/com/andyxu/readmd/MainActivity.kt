@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,22 +27,26 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -64,6 +67,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -80,6 +84,7 @@ import com.andyxu.readmd.data.ReaderSettings
 import com.andyxu.readmd.data.RecentFile
 import com.andyxu.readmd.file.OpenMarkdownDocument
 import com.andyxu.readmd.markdown.MarkdownPreview
+import com.andyxu.readmd.ui.theme.ReadMdBlueDark
 import com.andyxu.readmd.ui.theme.ReadMDTheme
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -125,14 +130,14 @@ private fun ReadMDAppShell(
         }
     }
 
-    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showSettingsPage by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    BackHandler(enabled = showSettings) {
-        showSettings = false
+    BackHandler(enabled = showSettingsPage) {
+        showSettingsPage = false
     }
 
-    BackHandler(enabled = !showSettings && isDocumentMode) {
+    BackHandler(enabled = !showSettingsPage && isDocumentMode) {
         viewModel.handleBack()
     }
 
@@ -154,31 +159,25 @@ private fun ReadMDAppShell(
         viewModel.consumeMessage()
     }
 
-    if (showSettings) {
-        ReadMDSettingsSheet(
-            fontScale = state.settings.fontScale,
-            lineHeightScale = state.settings.lineHeightScale,
-            elderMode = state.settings.elderMode,
-            darkMode = state.settings.darkMode,
-            onDismiss = { showSettings = false },
+    if (showSettingsPage) {
+        ReadMDSettingsScreen(
+            state = state,
+            snackbarHostState = snackbarHostState,
+            onBack = { showSettingsPage = false },
             onFontScaleChange = viewModel::setFontScale,
             onLineHeightChange = viewModel::setLineHeightScale,
             onToggleElderMode = viewModel::toggleElderMode,
             onToggleDarkMode = viewModel::toggleDarkMode,
         )
-    }
-
-    if (isDocumentMode) {
+    } else if (isDocumentMode) {
         ReadMDDocumentScreen(
             state = state,
             snackbarHostState = snackbarHostState,
-            onOpenHome = viewModel::closeDocument,
-            onOpenSettings = { showSettings = true },
+            onOpenSettings = { showSettingsPage = true },
             onSave = viewModel::saveCurrentFile,
             onSaveAs = viewModel::requestSaveAs,
             onExport = viewModel::requestExport,
             onEnterEdit = viewModel::enterEditMode,
-            onReturnToReading = viewModel::previewDraft,
             onDraftChange = viewModel::updateDraft,
             onReadingFontScaleChange = viewModel::setReadingFontScale,
             onReadingScrollFractionChange = viewModel::setReadingScrollFraction,
@@ -188,7 +187,7 @@ private fun ReadMDAppShell(
         ReadMDHomeScreen(
             state = state,
             snackbarHostState = snackbarHostState,
-            onOpenSettings = { showSettings = true },
+            onOpenSettings = { showSettingsPage = true },
             onImport = { openDocumentLauncher.launch(Unit) },
             onCreateNew = viewModel::newUnsavedDocument,
             onSearchChange = viewModel::updateSearch,
@@ -233,9 +232,7 @@ private fun ReadMDHomeScreen(
                     )
                 },
                 actions = {
-                    TextButton(onClick = onOpenSettings) {
-                        Text("设置", fontSize = appTextSize(elderMode, state.settings.fontScale, 16.sp))
-                    }
+                    SettingsIconButton(onClick = onOpenSettings)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -243,6 +240,9 @@ private fun ReadMDHomeScreen(
                     actionIconContentColor = MaterialTheme.colorScheme.primary,
                 ),
             )
+        },
+        floatingActionButton = {
+            NewNoteFab(onClick = onCreateNew)
         },
     ) { innerPadding ->
         LazyColumn(
@@ -253,40 +253,34 @@ private fun ReadMDHomeScreen(
             verticalArrangement = Arrangement.spacedBy(spacing),
         ) {
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(spacing),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     ActionButton(
                         text = "导入",
                         fontScale = textScale,
                         elderMode = elderMode,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(0.32f),
                         onClick = onImport,
                     )
-                    ActionButton(
-                        text = "新建",
-                        fontScale = textScale,
-                        elderMode = elderMode,
-                        modifier = Modifier.weight(1f),
-                        onClick = onCreateNew,
+                    OutlinedTextField(
+                        value = state.searchQuery,
+                        onValueChange = onSearchChange,
+                        modifier = Modifier.weight(0.68f),
+                        placeholder = {
+                            Text(
+                                "搜索",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(18.dp),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = appTextSize(elderMode, state.settings.fontScale, 16.sp),
+                        ),
                     )
                 }
-            }
-            item {
-                OutlinedTextField(
-                    value = state.searchQuery,
-                    onValueChange = onSearchChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = {
-                        Text(
-                            "搜索",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(18.dp),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = appTextSize(elderMode, state.settings.fontScale, 16.sp),
-                    ),
-                )
             }
             if (searchMatches.isNotEmpty()) {
                 items(searchMatches) { file ->
@@ -336,13 +330,11 @@ private fun ReadMDHomeScreen(
 private fun ReadMDDocumentScreen(
     state: DocumentState,
     snackbarHostState: SnackbarHostState,
-    onOpenHome: () -> Unit,
     onOpenSettings: () -> Unit,
     onSave: () -> Unit,
     onSaveAs: () -> Unit,
     onExport: () -> Unit,
     onEnterEdit: () -> Unit,
-    onReturnToReading: () -> Unit,
     onDraftChange: (String) -> Unit,
     onReadingFontScaleChange: (Float) -> Unit,
     onReadingScrollFractionChange: (Float) -> Unit,
@@ -360,31 +352,14 @@ private fun ReadMDDocumentScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            "ReadMD",
-                            fontSize = appTextSize(elderMode, state.settings.fontScale, 28.sp),
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = state.displayName,
-                            fontSize = appTextSize(elderMode, state.settings.fontScale, 15.sp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(
+                        "ReadMD",
+                        fontSize = appTextSize(elderMode, state.settings.fontScale, 28.sp),
+                        fontWeight = FontWeight.Bold,
+                    )
                 },
                 actions = {
-                    TextButton(onClick = if (state.isEditing) onReturnToReading else onOpenHome) {
-                        Text(
-                            if (state.isEditing) "阅读" else "首页",
-                            fontSize = appTextSize(elderMode, state.settings.fontScale, 15.sp),
-                        )
-                    }
-                    TextButton(onClick = onOpenSettings) {
-                        Text("设置", fontSize = appTextSize(elderMode, state.settings.fontScale, 15.sp))
-                    }
+                    SettingsIconButton(onClick = onOpenSettings)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -441,77 +416,70 @@ private fun ReadMDReadingMode(
     val elderMode = state.settings.elderMode
     val readingTextScale = (textScale * state.readingFontScale)
         .coerceIn(ReaderSettings.MIN_FONT_SCALE, ReaderSettings.MAX_FONT_SCALE)
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(spacing),
-    ) {
-        val previewScalePercent = (readingTextScale * 100).roundToInt()
-        Text(
-            text = state.displayName,
-            fontSize = appTextSize(elderMode, state.settings.fontScale, 20.sp),
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = "阅读字号 ${previewScalePercent}% · 可双指缩放",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = appTextSize(elderMode, state.settings.fontScale, 13.sp),
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-        )
-        Card(
-            modifier = Modifier.weight(1f),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(22.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+    Box(modifier = modifier) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(spacing),
         ) {
-            if (previewContent.isBlank()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(20.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "暂无内容，点击下方按钮开始编辑。",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = appTextSize(elderMode, state.settings.fontScale, 16.sp),
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            } else {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    MarkdownPreview(
-                        content = previewContent,
-                        fontScale = readingTextScale,
-                        lineHeightScale = state.settings.lineHeightScale,
-                        gestureFontScale = state.readingFontScale,
-                        scrollFraction = state.readingScrollFraction,
-                        onFontScaleChange = onReadingFontScaleChange,
-                        onScrollFractionChange = onReadingScrollFractionChange,
+            Text(
+                text = state.displayName,
+                fontSize = appTextSize(elderMode, state.settings.fontScale, 20.sp),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(22.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+            ) {
+                if (previewContent.isBlank()) {
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 18.dp, vertical = 16.dp),
-                    )
-                    ReadingPositionBar(
-                        fraction = state.readingScrollFraction,
-                        onFractionChange = onReadingScrollFractionChange,
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .fillMaxHeight()
-                            .width(28.dp)
-                            .padding(vertical = 18.dp),
-                    )
+                            .padding(20.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "暂无内容，点击左下角按钮开始编辑。",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = appTextSize(elderMode, state.settings.fontScale, 16.sp),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        MarkdownPreview(
+                            content = previewContent,
+                            fontScale = readingTextScale,
+                            lineHeightScale = state.settings.lineHeightScale,
+                            gestureFontScale = state.readingFontScale,
+                            scrollFraction = state.readingScrollFraction,
+                            onFontScaleChange = onReadingFontScaleChange,
+                            onScrollFractionChange = onReadingScrollFractionChange,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 18.dp, vertical = 16.dp),
+                        )
+                        ReadingPositionBar(
+                            fraction = state.readingScrollFraction,
+                            onFractionChange = onReadingScrollFractionChange,
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .width(28.dp)
+                                .padding(vertical = 18.dp),
+                        )
+                    }
                 }
             }
         }
-        SecondaryActionButton(
-            text = "进入编辑模式",
-            fontScale = textScale,
-            elderMode = elderMode,
-            modifier = Modifier.fillMaxWidth(),
+        EditFloatingButton(
             onClick = onEnterEdit,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 12.dp, bottom = 12.dp),
         )
     }
 }
@@ -663,64 +631,200 @@ private fun ReadMDEditMode(
 }
 
 @Composable
-private fun ReadMDSettingsSheet(
-    fontScale: Float,
-    lineHeightScale: Float,
-    elderMode: Boolean,
-    darkMode: Boolean,
-    onDismiss: () -> Unit,
+private fun ReadMDSettingsScreen(
+    state: DocumentState,
+    snackbarHostState: SnackbarHostState,
+    onBack: () -> Unit,
     onFontScaleChange: (Float) -> Unit,
     onLineHeightChange: (Float) -> Unit,
     onToggleElderMode: () -> Unit,
     onToggleDarkMode: () -> Unit,
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp * lineHeightScale),
+    val settings = state.settings
+    val elderMode = settings.elderMode
+    val spacing = uiSpacing(settings.lineHeightScale, elderMode)
+    val fontScale = settings.fontScale
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets.safeDrawing,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        "设置",
+                        fontSize = appTextSize(elderMode, fontScale, 26.sp),
+                        fontWeight = FontWeight.Bold,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_arrow_back_24),
+                            contentDescription = "返回",
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                ),
+            )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(spacing),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("设置", fontSize = 24.sp * fontScale, fontWeight = FontWeight.Bold)
-                TextButton(onClick = onDismiss) {
-                    Text("关闭", fontSize = 16.sp * fontScale)
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(22.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp * settings.lineHeightScale),
+                    ) {
+                        Text(
+                            "阅读显示",
+                            fontSize = appTextSize(elderMode, fontScale, 20.sp),
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text("字体", fontSize = appTextSize(elderMode, fontScale, 17.sp), fontWeight = FontWeight.Medium)
+                        Slider(
+                            value = fontScale,
+                            onValueChange = onFontScaleChange,
+                            valueRange = ReaderSettings.MIN_FONT_SCALE..ReaderSettings.MAX_FONT_SCALE,
+                        )
+                        Text(
+                            "行距",
+                            fontSize = appTextSize(elderMode, fontScale, 17.sp),
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Slider(
+                            value = settings.lineHeightScale,
+                            onValueChange = onLineHeightChange,
+                            valueRange = ReaderSettings.MIN_LINE_HEIGHT_SCALE..ReaderSettings.MAX_LINE_HEIGHT_SCALE,
+                        )
+                    }
                 }
             }
-            Text("字体", fontSize = 17.sp * fontScale, fontWeight = FontWeight.Medium)
-            Slider(
-                value = fontScale,
-                onValueChange = onFontScaleChange,
-                valueRange = ReaderSettings.MIN_FONT_SCALE..ReaderSettings.MAX_FONT_SCALE,
-            )
-            Text("行距", fontSize = 17.sp * fontScale, fontWeight = FontWeight.Medium)
-            Slider(
-                value = lineHeightScale,
-                onValueChange = onLineHeightChange,
-                valueRange = ReaderSettings.MIN_LINE_HEIGHT_SCALE..ReaderSettings.MAX_LINE_HEIGHT_SCALE,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp * lineHeightScale)) {
-                ActionButton(
-                    text = if (elderMode) "关闭大字" else "大字模式",
-                    fontScale = fontScale,
-                    elderMode = elderMode,
-                    modifier = Modifier.weight(1f),
-                    onClick = onToggleElderMode,
-                )
-                ActionButton(
-                    text = if (darkMode) "日间模式" else "夜间模式",
-                    fontScale = fontScale,
-                    elderMode = elderMode,
-                    modifier = Modifier.weight(1f),
-                    onClick = onToggleDarkMode,
-                )
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(22.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp * settings.lineHeightScale),
+                    ) {
+                        Text(
+                            "显示模式",
+                            fontSize = appTextSize(elderMode, fontScale, 20.sp),
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp * settings.lineHeightScale)) {
+                            ActionButton(
+                                text = if (elderMode) "关闭大字" else "大字模式",
+                                fontScale = fontScale,
+                                elderMode = elderMode,
+                                modifier = Modifier.weight(1f),
+                                onClick = onToggleElderMode,
+                            )
+                            ActionButton(
+                                text = if (settings.darkMode) "日间模式" else "夜间模式",
+                                fontScale = fontScale,
+                                elderMode = elderMode,
+                                modifier = Modifier.weight(1f),
+                                onClick = onToggleDarkMode,
+                            )
+                        }
+                    }
+                }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(22.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp * settings.lineHeightScale),
+                    ) {
+                        Text(
+                            "使用指南",
+                            fontSize = appTextSize(elderMode, fontScale, 20.sp),
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "阅读页支持双指缩放字号；从阅读页按系统返回可回到首页，从编辑页按系统返回可回到阅读页。",
+                            fontSize = appTextSize(elderMode, fontScale, 15.sp),
+                            lineHeight = appTextSize(elderMode, fontScale, 23.sp) * settings.lineHeightScale,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsIconButton(onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(
+            painter = painterResource(R.drawable.ic_settings_24),
+            contentDescription = "设置",
+            modifier = Modifier.size(30.dp),
+        )
+    }
+}
+
+@Composable
+private fun NewNoteFab(onClick: () -> Unit) {
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = Modifier.size(62.dp),
+        shape = CircleShape,
+        containerColor = ReadMdBlueDark,
+        contentColor = Color.White,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_add_24),
+            contentDescription = "新建笔记",
+            modifier = Modifier.size(34.dp),
+        )
+    }
+}
+
+@Composable
+private fun EditFloatingButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(58.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = ReadMdBlueDark,
+        border = BorderStroke(2.dp, ReadMdBlueDark),
+        shadowElevation = 8.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(R.drawable.ic_edit_24),
+                contentDescription = "进入编辑模式",
+                modifier = Modifier.size(30.dp),
+            )
         }
     }
 }
@@ -839,29 +943,6 @@ private fun ActionButton(
             softWrap = true,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
-        )
-    }
-}
-
-@Composable
-private fun SecondaryActionButton(
-    text: String,
-    fontScale: Float,
-    elderMode: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    val textSize = (if (elderMode) 20.sp else 16.sp) * fontScale
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier.heightIn(min = if (elderMode) 70.dp else 54.dp),
-        shape = RoundedCornerShape(22.dp),
-        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
-    ) {
-        Text(
-            text = text,
-            fontSize = textSize,
-            fontWeight = FontWeight.Bold,
         )
     }
 }
