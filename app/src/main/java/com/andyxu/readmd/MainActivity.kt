@@ -814,9 +814,8 @@ private fun EditFloatingButton(
         onClick = onClick,
         modifier = modifier.size(58.dp),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = ReadMdBlueDark,
-        border = BorderStroke(2.dp, ReadMdBlueDark),
+        color = ReadMdBlueDark,
+        contentColor = Color.White,
         shadowElevation = 8.dp,
     ) {
         Box(contentAlignment = Alignment.Center) {
