@@ -1,7 +1,7 @@
 # ReadMD 阶段 04：真机反馈修复记录
 
 日期：2026-05-24
-最近更新：2026-07-25
+最近更新：2026-09-21
 
 ## 1. 阶段背景
 
@@ -487,7 +487,7 @@
 
 ## 5. 当前结果
 
-截至 2026-07-25，阶段 04 已经把以下关键路径基本打通：
+截至 2026-09-21，阶段 04 已经把以下关键路径基本打通：
 
 - 本地 Markdown 文件可导入、阅读、编辑、保存、另存和导出 Markdown 原文。
 - 阅读页与编辑页分离，主流程更符合“先阅读、后编辑”的定位。
@@ -502,6 +502,15 @@
 - 阅读页新增右侧细定位条，长按加粗后可快速定位；进入编辑模式时会同步到源码中的相近位置。
 - 最近记录授权失效时不再显示 Android 底层权限报错，会提示“该记录已失效，请重新选择”，并移除失效的最近记录入口。
 - 首页、阅读页和设置入口已完成图标化改造；设置从底部弹窗迁移为独立设置页。
+- 草稿已迁移到应用私有 `noBackupFilesDir` 下的 `AtomicFile`，输入采用 750ms 防抖，Activity 停止时强制刷新；SharedPreferences 只保留设置、最近记录索引和短摘要。
+- 应用数据备份已关闭，草稿、正文摘要和最近 URI 不进入系统云备份或设备迁移备份。
+- 返回首页、新建、导入和打开最近记录统一经过“保存、放弃、继续编辑”未保存内容状态机；只有保存成功或显式放弃后才清除草稿。
+- SAF 创建文件 contract 会返回实际读写 grant flags，并对新建、另存和重新打开路径持久化授权。
+- Android 8 导航栏属性已放入 `values-v27`；状态栏和导航栏图标颜色由当前日间/夜间模式动态更新。
+- 首页已区分加载中、真正空首页、空搜索和无匹配搜索结果；无匹配时显示“未找到匹配笔记”。
+- 文本解码已固定为“UTF-16 仅接受 BOM；无 BOM 严格尝试 UTF-8、GB18030”，并覆盖 BOM、GB18030、乱码、未知大小流和超限测试。
+- 阶段 04 的 13 项历史问题已同步到 `docs/testing.md` 的防回归矩阵，并由 ViewModel、伪 ContentResolver/Repository、Compose UI 和文件 contract 测试覆盖关键路径。
+- 已生成仓库外正式签名证书并配置 GitHub Actions Secrets；`v0.1.0` 预发布 APK 已通过 `apksigner` 验证并发布到 GitHub Releases。
 
 ## 6. 验证记录
 
@@ -509,17 +518,19 @@
 
 ```powershell
 git diff --check
-.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintDebug :app:assembleDebug :app:assembleRelease
 ```
 
 结果：
 
 - 空白检查通过。
 - 单元测试通过。
+- AndroidTest、Lint、Debug 和 Release 构建全部通过，Lint 未使用 baseline 隐藏问题。
 - Debug APK 可重新生成。
-- Release APK 可在 lint vital、R8 和资源压缩开启后生成。
+- Release APK 在 R8 和资源压缩开启后生成；配置签名环境后通过 `apksigner verify --verbose`。
 - 授权失效提示识别单元测试通过。
 - 最近记录授权失效修复和本轮 UI 图标化改造至少在构建层面保持可用。
+- GitHub Actions 的 tag 门禁和 `v0.1.0` 预发布发布任务成功；普通 `main` 分支门禁也已重新通过。
 
 ## 7. 待真机复测
 
@@ -549,6 +560,8 @@ git diff --check
 - 首页右下角加号悬浮按钮应能创建新备忘录；阅读页左下角铅笔图标应能进入编辑页。
 - 阅读页顶部不应重复显示文件名；“首页”“阅读”“进入编辑模式”等冗余文字按钮不应重新出现。
 - 设置齿轮应进入独立设置页；设置页返回箭头和系统返回手势都应能回到原页面。
+- Android 8 上应检查 `values-v27` 导航栏属性不触发资源兼容问题，日间/夜间切换后系统栏图标应保持可读。
+- 应检查应用重启后草稿恢复、草稿文件不进入备份、最近 URI 授权失效和新建/另存文件再次打开等生命周期场景。
 
 ## 8. 阶段结论
 
@@ -558,6 +571,22 @@ git diff --check
 
 1. 对移动端 Markdown 应用来说，稳定的文件读取、稳妥的草稿恢复、顺滑的阅读滚动和清楚的主题适配，比堆更多高级功能更重要。
 2. 真机反馈非常关键。很多问题在本地构建和代码阅读中看不出来，只有在具体设备、具体系统版本、具体输入法和真实 Markdown 文件上，才会暴露出真正影响体验的细节。
+
+## 9.14 规划完成度核对（2026-09-21）
+
+此前规划的 9 项优化均已在本记录或对应实现中留下可追溯记录：
+
+1. 防回归门禁：已落地到 `docs/testing.md`、GitHub Actions 和本地完整 Gradle 命令；Lint 不使用 baseline。
+2. 草稿存储：已记录应用私有原子文件、750ms 防抖和生命周期刷新；旧 SharedPreferences 草稿仅用于一次迁移。
+3. 备份规则：`android:allowBackup="false"`，同时保留 XML 排除规则，文档已明确草稿、摘要和最近 URI 不备份。
+4. 未保存保护：`PendingNavigation` 覆盖返回首页、新建、导入和最近记录，统一提供保存、放弃、继续编辑。
+5. SAF 权限链路：打开和创建 contract 返回 grant flags，Repository 负责持久化读写权限，并有 contract、伪 Repository 测试和生命周期验收清单覆盖。
+6. Android 8 构建门禁：导航栏属性位于 `values-v27`，运行时系统栏图标颜色随主题更新；完整 `lintDebug` 已通过。
+7. 首页状态：搜索为空、无匹配、真实空首页和加载中分支已实现，并有 Compose UI 测试。
+8. 解码与错误模型：BOM、GB18030、乱码、未知大小和超限路径已有实现与测试夹具。
+9. 自动化测试：ViewModel、伪 ContentResolver/Repository、Compose UI、缩放隔离、单指滚动、保存/另存、草稿恢复、最近 20 条和大字布局均已纳入测试或真机验收清单。
+
+当前没有发现需要另建问题文档的遗漏；后续新增问题继续追加到本阶段记录的对应小节和第 9 节防回归清单。
 
 ## 9. 修复冲突与防回归清单
 

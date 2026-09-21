@@ -25,7 +25,8 @@
 ## 本次验证结果
 
 - JVM 单元测试：38 项通过，0 失败。
-- Android 仪器测试 APK：编译通过；本机无已连接设备，尚未执行 `connectedDebugAndroidTest`。
+- Android 仪器测试 APK：编译通过；当前门禁验证 `assembleDebugAndroidTest`，未将无设备环境误报为 `connectedDebugAndroidTest` 已执行。
 - Android Lint：0 error；没有配置 lint baseline。
-- Debug APK：构建通过，约 11.8 MB。
-- Release APK：R8 与资源压缩构建通过，未签名产物约 1.8 MB。
+- Debug APK：构建通过，约 12 MB。
+- Release APK：R8 与资源压缩构建通过；配置仓库外正式证书后签名验证通过，已随 `v0.1.0` 预发布版上传 GitHub Releases。
+- GitHub Actions tag 门禁、APK 签名校验和预发布发布任务均已通过；普通 `main` 分支门禁也已通过。

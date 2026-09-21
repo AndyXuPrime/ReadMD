@@ -2,6 +2,8 @@
 
 本文把阶段 04 第 9 节的历史问题转换为持续执行的测试清单。自动化检查不能替代真机手势、输入法和文件提供方兼容性验证。
 
+最近更新：2026-09-21
+
 ## 自动化命令
 
 ```powershell
@@ -13,6 +15,7 @@
 - `assembleDebugAndroidTest` 保证设备测试可编译；连接设备后运行 `connectedDebugAndroidTest`。
 - GitHub Actions 对每次 push 和 pull request 执行同一质量门禁。
 - 不使用 lint baseline 隐藏错误。
+- 推送 `v*` 标签时，门禁还会注入仓库外正式签名证书，验证 Release APK 签名并发布 GitHub 预发布版；普通分支构建保持无签名 Release 构建。
 
 ## 阶段 04 防回归矩阵
 

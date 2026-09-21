@@ -1,6 +1,6 @@
 # ReadMD 下载安装说明
 
-本文说明如何获取、安装和构建 ReadMD。当前项目仍处于开发阶段，尚未提供正式应用商店版本。
+本文说明如何获取、安装和构建 ReadMD。当前项目仍处于预发布阶段，已提供 GitHub Releases 预发布 APK。
 
 ## 1. 适合普通体验用户的安装方式
 
@@ -17,7 +17,7 @@
 
 - 不同 Android 系统可能要求你允许“安装未知来源应用”。
 - Debug APK 可能显示为“不安全来源”，这是开发测试包的正常现象。
-- 当前项目尚未提供正式签名的 Release APK，因此 `app-debug.apk` 主要用于体验和测试。
+- Debug APK 仍主要用于开发测试；正式体验请优先使用 GitHub Releases 中的签名预发布 APK。
 
 Android 设备要求：
 
@@ -32,9 +32,9 @@ Android 设备要求：
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-当前正式 Release APK 尚未发布。后续如果配置 GitHub Releases，正式下载入口会优先放在项目 README 和 Releases 页面中。
+当前预发布 Release APK 下载入口：<https://github.com/AndyXuPrime/ReadMD/releases/tag/v0.1.0>。
 
-当前也可以生成未签名 Release APK，用于观察正式包体积：
+未配置签名环境时仍可以生成未签名 Release APK，用于本地观察正式包体积：
 
 ```powershell
 .\gradlew.bat :app:assembleRelease
@@ -50,7 +50,7 @@ app/build/outputs/apk/release/app-release-unsigned.apk
 
 - `app-release-unsigned.apk` 未正式签名，通常不能直接作为公开安装包分发。
 - Release 包已启用 R8 代码压缩和资源压缩，体积会明显小于 Debug APK。
-- 真正发布前仍需要配置正式签名证书。
+- GitHub Actions 发布构建使用仓库外正式签名证书，通过 Secrets 注入；证书文件和密码不在仓库中。
 
 ## 3. 从源码构建 Debug APK
 
@@ -86,7 +86,7 @@ app/build/outputs/apk/debug/app-debug.apk
 
 - Debug APK 适合开发测试。
 - Debug APK 不是正式发布包。
-- 当前项目尚未配置正式签名证书。
+- 本地如需生成签名 Release APK，需设置 `READMD_SIGNING_STORE_FILE`、`READMD_SIGNING_STORE_PASSWORD`、`READMD_SIGNING_KEY_ALIAS` 和 `READMD_SIGNING_KEY_PASSWORD` 四个环境变量。
 
 ## 4. 开发者安装方式
 
@@ -191,4 +191,4 @@ D:\AndroidDevelop\AndroidSdk\cmdline-tools\latest\bin
 
 - 版本更新说明
 
-当前阶段先以 Debug APK 和手动安装为主。
+当前阶段以签名预发布 APK 和手动安装为主；正式版本仍需继续积累真机反馈后再决定。

@@ -20,7 +20,7 @@ ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点
 ## 下载与获取
 
 - 源码仓库：<https://github.com/AndyXuPrime/ReadMD>
-- 当前正式 Release APK：尚未发布
+- 当前预发布 Release APK：[v0.1.0 GitHub Release](https://github.com/AndyXuPrime/ReadMD/releases/tag/v0.1.0)
 - 体验测试包：可使用本机生成的 `app/build/outputs/apk/debug/app-debug.apk`，并按 [下载安装说明](docs/installation.md) 手动安装到手机
 - 后续正式发布：会优先通过 GitHub Releases 提供下载入口
 
@@ -79,7 +79,7 @@ ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点
 - 自动草稿保护
 - 基于成熟 Android Markdown 渲染方案显示常见 Markdown 内容
 
-当前尚未实现 PDF、JPG、PNG 导出，也尚未提供正式签名的 Release APK。
+当前尚未实现 PDF、JPG、PNG 导出；正式签名预发布 APK 已通过 GitHub Releases 提供。
 
 ## 构建验证
 
@@ -103,7 +103,7 @@ app/build/outputs/apk/debug/app-debug.apk
 app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
-下一阶段将继续打磨真机阅读体验、兼容性测试、正式签名和发布流程。
+下一阶段将继续打磨真机阅读体验和兼容性测试；正式签名与 GitHub Actions 发布流程已建立。
 
 <div align="center">
 
