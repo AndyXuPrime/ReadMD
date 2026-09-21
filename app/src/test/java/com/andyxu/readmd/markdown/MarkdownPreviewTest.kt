@@ -42,4 +42,39 @@ class MarkdownPreviewTest {
 
         assertFalse(containsLatexMath(content))
     }
+
+    @Test
+    fun styleOnlyChanges_doNotRequestFullMarkdownRender() {
+        val markdown = "# 标题\n\n普通内容"
+
+        assertFalse(
+            shouldRenderMarkdown(
+                renderedMarkdown = markdown,
+                renderedLatexScaleBucket = null,
+                markdown = markdown,
+                latexScaleBucket = latexScaleBucket(markdown, 1.55f),
+            ),
+        )
+    }
+
+    @Test
+    fun latexScaleBucketChange_requestsRender() {
+        val markdown = "公式：${'$'}${'$'}E = mc^2${'$'}${'$'}"
+
+        assertTrue(
+            shouldRenderMarkdown(
+                renderedMarkdown = markdown,
+                renderedLatexScaleBucket = latexScaleBucket(markdown, 1f),
+                markdown = markdown,
+                latexScaleBucket = latexScaleBucket(markdown, 1.2f),
+            ),
+        )
+    }
+
+    @Test
+    fun touchRouting_keepsSingleFingerEventsForTextViewScrolling() {
+        assertFalse(shouldConsumeAsScaleGesture(pointerCount = 1, scaleInProgress = false))
+        assertTrue(shouldConsumeAsScaleGesture(pointerCount = 2, scaleInProgress = false))
+        assertTrue(shouldConsumeAsScaleGesture(pointerCount = 1, scaleInProgress = true))
+    }
 }

@@ -31,11 +31,11 @@ fun MarkdownPreview(
     content: String,
     fontScale: Float,
     lineHeightScale: Float,
+    modifier: Modifier = Modifier,
     gestureFontScale: Float = fontScale,
     scrollFraction: Float = 0f,
     onFontScaleChange: ((Float) -> Unit)? = null,
     onScrollFractionChange: ((Float) -> Unit)? = null,
-    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
@@ -145,12 +145,8 @@ private class ZoomableMarkdownTextView(
         setHintTextColor(hintColor)
         setLinkTextColor(linkColor)
         setBackgroundColor(backgroundColor)
-        val latexScaleBucket = if (containsLatexMath(markdown)) {
-            (fontScale / LATEX_SCALE_BUCKET).roundToInt()
-        } else {
-            null
-        }
-        if (renderedMarkdown != markdown || renderedLatexScaleBucket != latexScaleBucket) {
+        val latexScaleBucket = latexScaleBucket(markdown, fontScale)
+        if (shouldRenderMarkdown(renderedMarkdown, renderedLatexScaleBucket, markdown, latexScaleBucket)) {
             markwon.setMarkdown(this, markdown)
             renderedMarkdown = markdown
             renderedLatexScaleBucket = latexScaleBucket
@@ -165,12 +161,19 @@ private class ZoomableMarkdownTextView(
         scaleDetector.onTouchEvent(event)
         if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
             parent?.requestDisallowInterceptTouchEvent(false)
+            if (event.actionMasked == MotionEvent.ACTION_UP && !scaleDetector.isInProgress) {
+                performClick()
+            }
         }
-        if (event.pointerCount > 1 || scaleDetector.isInProgress) {
+        if (shouldConsumeAsScaleGesture(event.pointerCount, scaleDetector.isInProgress)) {
             parent?.requestDisallowInterceptTouchEvent(true)
             return true
         }
         return super.onTouchEvent(event)
+    }
+
+    override fun performClick(): Boolean {
+        return super.performClick()
     }
 
     override fun onScrollChanged(left: Int, top: Int, oldLeft: Int, oldTop: Int) {
@@ -226,6 +229,27 @@ fun containsLatexMath(content: String): Boolean {
     if (content.contains("$$")) return true
     if (content.contains("\\[") || content.contains("\\(")) return true
     return Regex("""(^|[^\\])\$[^$\n]+\$""").containsMatchIn(content)
+}
+
+internal fun latexScaleBucket(content: String, fontScale: Float): Int? {
+    return if (containsLatexMath(content)) {
+        (fontScale / LATEX_SCALE_BUCKET).roundToInt()
+    } else {
+        null
+    }
+}
+
+internal fun shouldRenderMarkdown(
+    renderedMarkdown: String?,
+    renderedLatexScaleBucket: Int?,
+    markdown: String,
+    latexScaleBucket: Int?,
+): Boolean {
+    return renderedMarkdown != markdown || renderedLatexScaleBucket != latexScaleBucket
+}
+
+internal fun shouldConsumeAsScaleGesture(pointerCount: Int, scaleInProgress: Boolean): Boolean {
+    return pointerCount > 1 || scaleInProgress
 }
 
 fun countSearchMatches(content: String, query: String): Int {

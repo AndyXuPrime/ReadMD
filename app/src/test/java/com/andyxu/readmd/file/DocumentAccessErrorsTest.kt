@@ -35,4 +35,11 @@ class DocumentAccessErrorsTest {
 
         assertEquals("该记录已失效，请重新选择", error.openDocumentMessage())
     }
+
+    @Test
+    fun openDocumentMessage_distinguishesFreshPickerFromStaleRecentEntry() {
+        val error = SecurityException("Permission Denial: content://private")
+
+        assertEquals("无法读取该文件，请重新选择", error.openDocumentMessage(isRecentFile = false))
+    }
 }

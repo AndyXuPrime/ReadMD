@@ -11,9 +11,9 @@ fun Throwable.isDocumentAccessDenied(): Boolean {
     }
 }
 
-fun Throwable.openDocumentMessage(): String {
+fun Throwable.openDocumentMessage(isRecentFile: Boolean = true): String {
     return if (isDocumentAccessDenied()) {
-        "该记录已失效，请重新选择"
+        if (isRecentFile) "该记录已失效，请重新选择" else "无法读取该文件，请重新选择"
     } else {
         "无法打开文件：${message ?: "请重新选择"}"
     }

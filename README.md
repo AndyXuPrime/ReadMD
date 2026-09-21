@@ -54,6 +54,8 @@ ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点
 - [阶段 03 开发记录：稳定性与文档](docs/development/stage-03-stability-docs.md)
 - [阶段 03 补充记录：稳定性跟进](docs/development/stage-03-stability-followup.md)
 - [阶段 04 开发记录：真机反馈修复](docs/development/stage-04-user-feedback-fixes.md)
+- [阶段 05 开发记录：P0 稳定性门禁与数据保护](docs/development/stage-05-p0-hardening.md)
+- [测试与防回归门禁](docs/testing.md)
 
 ## 当前状态
 
@@ -84,8 +86,10 @@ ReadMD 解决手机端 Markdown 文件阅读和编辑不顺手的问题，重点
 已验证：
 
 ```powershell
-.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintDebug :app:assembleDebug :app:assembleRelease
 ```
+
+连接设备或模拟器后，可额外执行 `.\gradlew.bat :app:connectedDebugAndroidTest` 运行 Compose、SAF contract 和伪 ContentResolver 仪器测试。
 
 Debug APK 构建产物：
 

@@ -6,31 +6,32 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.util.AtomicFile
+import androidx.core.content.edit
 import java.io.File
-import java.io.ByteArrayOutputStream
-import java.nio.ByteBuffer
-import java.nio.charset.Charset
-import java.nio.charset.CharsetDecoder
-import java.nio.charset.CodingErrorAction
 import org.json.JSONArray
 import org.json.JSONObject
 
-class DocumentRepository(private val context: Context) {
+class DocumentRepository(private val context: Context) : DocumentStore {
     private companion object {
-        const val DEFAULT_MAX_READ_BYTES = 2L * 1024L * 1024L
-        const val MAX_RECENT_FILES = 20
         const val KEY_RECENT_FILES = "recent_files"
         const val KEY_ELDER_MODE = "elder_mode"
         const val KEY_DARK_MODE = "dark_mode"
         const val KEY_FONT_SCALE = "font_scale"
         const val KEY_LINE_HEIGHT_SCALE = "line_height_scale"
-        const val KEY_DRAFT = "draft"
+        const val KEY_LEGACY_DRAFT = "draft"
+        const val DRAFT_FILE_NAME = "readmd-draft.json"
     }
 
     private val resolver = context.contentResolver
     private val prefs = context.getSharedPreferences("readmd", Context.MODE_PRIVATE)
+    private val draftFile = AtomicFile(File(context.noBackupFilesDir, DRAFT_FILE_NAME))
 
-    fun persistUriPermission(uri: Uri, grantFlags: Int) {
+    init {
+        migrateLegacyDraft()
+    }
+
+    override fun persistUriPermission(uri: Uri, grantFlags: Int) {
         val supportedFlags = grantFlags and (
             Intent.FLAG_GRANT_READ_URI_PERMISSION or
                 Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -46,11 +47,11 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
-    fun displayName(uri: Uri): String {
+    override fun displayName(uri: Uri): String {
         return queryDisplayName(uri) ?: uri.lastPathSegment?.substringAfterLast('/') ?: "未命名.md"
     }
 
-    fun fileSize(uri: Uri): Long? {
+    override fun fileSize(uri: Uri): Long? {
         var cursor: Cursor? = null
         return try {
             cursor = resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
@@ -65,19 +66,19 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
-    fun mimeType(uri: Uri): String? {
+    override fun mimeType(uri: Uri): String? {
         return resolver.getType(uri)
     }
 
-    fun readText(uri: Uri, maxBytes: Long = DEFAULT_MAX_READ_BYTES): String {
+    override fun readText(uri: Uri, maxBytes: Long): String {
         resolver.openInputStream(uri).use { input ->
             requireNotNull(input) { "无法打开文件输入流" }
             val bytes = readAllBytesLimited(input, maxBytes)
-            return decodeText(bytes)
+            return decodeDocumentText(bytes)
         }
     }
 
-    fun writeText(uri: Uri, content: String) {
+    override fun writeText(uri: Uri, content: String) {
         resolver.openOutputStream(uri, "wt").use { output ->
             requireNotNull(output) { "无法打开文件输出流" }
             output.write(content.toByteArray(Charsets.UTF_8))
@@ -85,18 +86,14 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
-    fun canWrite(uri: Uri): Boolean {
+    override fun canWrite(uri: Uri): Boolean {
         val persisted = resolver.persistedUriPermissions.firstOrNull { it.uri == uri }
         if (persisted?.isWritePermission == true) return true
         if (uri.scheme == "file") return uri.path?.let { File(it).canWrite() } == true
         return documentSupportsWrite(uri)
     }
 
-    fun rememberRecentFile(uri: Uri, displayName: String, canWrite: Boolean) {
-        rememberRecentFile(uri, displayName, canWrite, previewSnippet = "")
-    }
-
-    fun rememberRecentFile(
+    override fun rememberRecentFile(
         uri: Uri,
         displayName: String,
         canWrite: Boolean,
@@ -116,7 +113,7 @@ class DocumentRepository(private val context: Context) {
         saveRecentFiles(current.take(MAX_RECENT_FILES))
     }
 
-    fun recentFiles(): List<RecentFile> {
+    override fun recentFiles(): List<RecentFile> {
         val raw = prefs.getString(KEY_RECENT_FILES, "[]") ?: "[]"
         return runCatching {
             val array = JSONArray(raw)
@@ -137,16 +134,16 @@ class DocumentRepository(private val context: Context) {
         }.getOrDefault(emptyList())
     }
 
-    fun clearRecentFiles() {
-        prefs.edit().remove(KEY_RECENT_FILES).apply()
+    override fun clearRecentFiles() {
+        prefs.edit { remove(KEY_RECENT_FILES) }
     }
 
-    fun forgetRecentFile(uri: Uri) {
+    override fun forgetRecentFile(uri: Uri) {
         val remaining = recentFiles().filterNot { it.uri == uri.toString() }
         saveRecentFiles(remaining)
     }
 
-    fun readerSettings(): ReaderSettings {
+    override fun readerSettings(): ReaderSettings {
         return ReaderSettings(
             elderMode = prefs.getBoolean(KEY_ELDER_MODE, false),
             darkMode = prefs.getBoolean(KEY_DARK_MODE, false),
@@ -157,25 +154,25 @@ class DocumentRepository(private val context: Context) {
         )
     }
 
-    fun saveReaderSettings(settings: ReaderSettings) {
-        prefs.edit()
-            .putBoolean(KEY_ELDER_MODE, settings.elderMode)
-            .putBoolean(KEY_DARK_MODE, settings.darkMode)
-            .putFloat(
+    override fun saveReaderSettings(settings: ReaderSettings) {
+        prefs.edit {
+            putBoolean(KEY_ELDER_MODE, settings.elderMode)
+            putBoolean(KEY_DARK_MODE, settings.darkMode)
+            putFloat(
                 KEY_FONT_SCALE,
                 settings.fontScale.coerceIn(ReaderSettings.MIN_FONT_SCALE, ReaderSettings.MAX_FONT_SCALE),
             )
-            .putFloat(
+            putFloat(
                 KEY_LINE_HEIGHT_SCALE,
                 settings.lineHeightScale.coerceIn(
                     ReaderSettings.MIN_LINE_HEIGHT_SCALE,
                     ReaderSettings.MAX_LINE_HEIGHT_SCALE,
                 ),
             )
-            .apply()
+        }
     }
 
-    fun saveDraft(snapshot: DraftSnapshot) {
+    override fun saveDraft(snapshot: DraftSnapshot) {
         val value = JSONObject()
             .put("currentUri", snapshot.currentUri)
             .put("displayName", sanitizeText(snapshot.displayName))
@@ -184,29 +181,29 @@ class DocumentRepository(private val context: Context) {
             .put("canWriteCurrentFile", snapshot.canWriteCurrentFile)
             .put("updatedAt", snapshot.updatedAt)
             .toString()
-        prefs.edit().putString(KEY_DRAFT, value).apply()
+            .toByteArray(Charsets.UTF_8)
+        val output = draftFile.startWrite()
+        try {
+            output.write(value)
+            output.flush()
+            draftFile.finishWrite(output)
+        } catch (error: Exception) {
+            draftFile.failWrite(output)
+            throw error
+        }
     }
 
-    fun draftSnapshot(): DraftSnapshot? {
-        val raw = prefs.getString(KEY_DRAFT, null) ?: return null
-        return runCatching {
-            val value = JSONObject(raw)
-            DraftSnapshot(
-                currentUri = value.optString("currentUri").takeUnless { it.isBlank() || it == "null" },
-                displayName = sanitizeText(value.optString("displayName", "自动恢复草稿.md")),
-                content = sanitizeText(value.optString("content")),
-                draftContent = sanitizeText(value.optString("draftContent")),
-                canWriteCurrentFile = value.optBoolean("canWriteCurrentFile"),
-                updatedAt = value.optLong("updatedAt"),
-            )
-        }.getOrNull()
+    override fun draftSnapshot(): DraftSnapshot? {
+        if (!draftFile.baseFile.exists()) return null
+        val raw = runCatching { draftFile.readFully().toString(Charsets.UTF_8) }.getOrNull() ?: return null
+        return parseDraft(raw)
     }
 
-    fun clearDraft() {
-        prefs.edit().remove(KEY_DRAFT).apply()
+    override fun clearDraft() {
+        draftFile.delete()
     }
 
-    fun buildPreviewSnippet(content: String, maxChars: Int = 160): String {
+    override fun buildPreviewSnippet(content: String, maxChars: Int): String {
         val normalized = sanitizeText(content)
             .lines()
             .asSequence()
@@ -230,7 +227,36 @@ class DocumentRepository(private val context: Context) {
                     .put("previewSnippet", sanitizeText(file.previewSnippet)),
             )
         }
-        prefs.edit().putString(KEY_RECENT_FILES, array.toString()).apply()
+        prefs.edit { putString(KEY_RECENT_FILES, array.toString()) }
+    }
+
+    private fun migrateLegacyDraft() {
+        val raw = prefs.getString(KEY_LEGACY_DRAFT, null) ?: return
+        if (draftFile.baseFile.exists()) {
+            prefs.edit { remove(KEY_LEGACY_DRAFT) }
+            return
+        }
+        val snapshot = parseDraft(raw)
+        if (snapshot == null) {
+            prefs.edit { remove(KEY_LEGACY_DRAFT) }
+            return
+        }
+        runCatching { saveDraft(snapshot) }
+            .onSuccess { prefs.edit { remove(KEY_LEGACY_DRAFT) } }
+    }
+
+    private fun parseDraft(raw: String): DraftSnapshot? {
+        return runCatching {
+            val value = JSONObject(raw)
+            DraftSnapshot(
+                currentUri = value.optString("currentUri").takeUnless { it.isBlank() || it == "null" },
+                displayName = sanitizeText(value.optString("displayName", "自动恢复草稿.md")),
+                content = sanitizeText(value.optString("content")),
+                draftContent = sanitizeText(value.optString("draftContent")),
+                canWriteCurrentFile = value.optBoolean("canWriteCurrentFile"),
+                updatedAt = value.optLong("updatedAt"),
+            )
+        }.getOrNull()
     }
 
     private fun queryDisplayName(uri: Uri): String? {
@@ -270,80 +296,7 @@ class DocumentRepository(private val context: Context) {
         }
     }
 
-    private fun readAllBytesLimited(input: java.io.InputStream, maxBytes: Long): ByteArray {
-        val buffer = ByteArrayOutputStream()
-        val chunk = ByteArray(DEFAULT_BUFFER_SIZE)
-        var total = 0L
-        while (true) {
-            val read = input.read(chunk)
-            if (read <= 0) break
-            total += read
-            if (total > maxBytes) {
-                throw IllegalStateException("文件超过 2MB，建议拆分后再打开")
-            }
-            buffer.write(chunk, 0, read)
-        }
-        return buffer.toByteArray()
-    }
-
-    fun sanitizeText(text: String): String {
-        return text
-            .replace("\uFEFF", "")
-            .replace("\u0000", "")
-            .replace("\r\n", "\n")
-            .replace("\r", "\n")
-    }
-
-    private fun decodeText(bytes: ByteArray): String {
-        val candidates = buildList {
-            when {
-                bytes.size >= 3 &&
-                    bytes[0] == 0xEF.toByte() &&
-                    bytes[1] == 0xBB.toByte() &&
-                    bytes[2] == 0xBF.toByte() -> add(Charsets.UTF_8)
-
-                bytes.size >= 2 &&
-                    bytes[0] == 0xFF.toByte() &&
-                    bytes[1] == 0xFE.toByte() -> add(Charset.forName("UTF-16LE"))
-
-                bytes.size >= 2 &&
-                    bytes[0] == 0xFE.toByte() &&
-                    bytes[1] == 0xFF.toByte() -> add(Charset.forName("UTF-16BE"))
-            }
-            add(Charsets.UTF_8)
-            add(Charset.forName("UTF-16LE"))
-            add(Charset.forName("UTF-16BE"))
-            add(Charset.forName("GBK"))
-        }.distinct()
-
-        for (charset in candidates) {
-            runCatching {
-                val start = when {
-                    charset == Charsets.UTF_8 &&
-                        bytes.size >= 3 &&
-                        bytes[0] == 0xEF.toByte() &&
-                        bytes[1] == 0xBB.toByte() &&
-                        bytes[2] == 0xBF.toByte() -> 3
-
-                    charset.name() == "UTF-16LE" &&
-                        bytes.size >= 2 &&
-                        bytes[0] == 0xFF.toByte() &&
-                        bytes[1] == 0xFE.toByte() -> 2
-
-                    charset.name() == "UTF-16BE" &&
-                        bytes.size >= 2 &&
-                        bytes[0] == 0xFE.toByte() &&
-                        bytes[1] == 0xFF.toByte() -> 2
-
-                    else -> 0
-                }
-                val decoder: CharsetDecoder = charset.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT)
-                val decoded = decoder.decode(ByteBuffer.wrap(bytes, start, bytes.size - start)).toString()
-                return sanitizeText(decoded)
-            }
-        }
-        return sanitizeText(String(bytes, Charsets.UTF_8))
+    override fun sanitizeText(text: String): String {
+        return sanitizeDocumentText(text)
     }
 }

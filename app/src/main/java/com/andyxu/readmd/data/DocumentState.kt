@@ -9,6 +9,18 @@ enum class SaveTarget {
     NewDocument,
 }
 
+enum class NavigationTarget {
+    Home,
+    NewDocument,
+    ImportDocument,
+    RecentFile,
+}
+
+data class PendingNavigation(
+    val target: NavigationTarget,
+    val recentUri: String? = null,
+)
+
 data class RecentFile(
     val uri: String,
     val displayName: String,
@@ -59,6 +71,9 @@ data class DocumentState(
     val pendingEditScrollFraction: Float? = null,
     val recentFiles: List<RecentFile> = emptyList(),
     val pendingSaveTarget: SaveTarget? = null,
+    val pendingNavigation: PendingNavigation? = null,
+    val isResolvingNavigation: Boolean = false,
+    val shouldLaunchDocumentPicker: Boolean = false,
 ) {
     val activeContent: String
         get() = if (isEditing) draftContent else previewContent ?: content

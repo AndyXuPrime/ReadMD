@@ -42,3 +42,26 @@ class OpenMarkdownDocument : ActivityResultContract<Unit, PickedDocument?>() {
         return PickedDocument(uri = uri, grantFlags = flags)
     }
 }
+
+class CreateMarkdownDocument : ActivityResultContract<String, PickedDocument?>() {
+    override fun createIntent(context: Context, input: String): Intent {
+        return Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/markdown"
+            putExtra(Intent.EXTRA_TITLE, input)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+    }
+
+    override fun parseResult(resultCode: Int, intent: Intent?): PickedDocument? {
+        if (resultCode != Activity.RESULT_OK) return null
+        val uri = intent?.data ?: return null
+        val flags = intent.flags and (
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+        return PickedDocument(uri = uri, grantFlags = flags)
+    }
+}

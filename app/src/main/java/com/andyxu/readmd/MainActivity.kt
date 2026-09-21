@@ -2,14 +2,13 @@
 
 package com.andyxu.readmd
 
-import android.net.Uri
 import android.os.Bundle
+import androidx.activity.viewModels
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -33,10 +32,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,9 +54,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -78,10 +81,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.view.WindowCompat
+import com.andyxu.readmd.data.DocumentRepository
 import com.andyxu.readmd.data.DocumentState
 import com.andyxu.readmd.data.ReaderSettings
 import com.andyxu.readmd.data.RecentFile
+import com.andyxu.readmd.file.CreateMarkdownDocument
 import com.andyxu.readmd.file.OpenMarkdownDocument
 import com.andyxu.readmd.markdown.MarkdownPreview
 import com.andyxu.readmd.ui.theme.ReadMdBlueDark
@@ -92,19 +97,33 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
+    private val readMDViewModel: ReadMDViewModel by viewModels {
+        ReadMDViewModel.factory(DocumentRepository(applicationContext))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val viewModel: ReadMDViewModel = viewModel()
-            val state by viewModel.state.collectAsState()
+            val state by readMDViewModel.state.collectAsState()
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !state.settings.darkMode
+                    isAppearanceLightNavigationBars = !state.settings.darkMode
+                }
+            }
             ReadMDTheme(
                 darkTheme = state.settings.darkMode,
                 elderMode = state.settings.elderMode,
             ) {
-                ReadMDAppShell(state = state, viewModel = viewModel)
+                ReadMDAppShell(state = state, viewModel = readMDViewModel)
             }
         }
+    }
+
+    override fun onStop() {
+        readMDViewModel.flushDraft()
+        super.onStop()
     }
 }
 
@@ -119,12 +138,10 @@ private fun ReadMDAppShell(
             viewModel.openPickedDocument(document)
         }
     }
-    val createDocumentLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("text/markdown"),
-    ) { uri: Uri? ->
+    val createDocumentLauncher = rememberLauncherForActivityResult(CreateMarkdownDocument()) { document ->
         val target = state.pendingSaveTarget
-        if (uri != null && target != null) {
-            viewModel.writeCreatedDocument(uri, target)
+        if (document != null && target != null) {
+            viewModel.writeCreatedDocument(document, target)
         } else {
             viewModel.clearPendingSaveTarget()
         }
@@ -153,10 +170,24 @@ private fun ReadMDAppShell(
         )
     }
 
+    LaunchedEffect(state.shouldLaunchDocumentPicker) {
+        if (!state.shouldLaunchDocumentPicker) return@LaunchedEffect
+        viewModel.consumeDocumentPickerRequest()
+        openDocumentLauncher.launch(Unit)
+    }
+
     LaunchedEffect(state.message) {
         val message = state.message ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
         viewModel.consumeMessage()
+    }
+
+    if (state.pendingNavigation != null && !state.isResolvingNavigation) {
+        UnsavedChangesDialog(
+            onSave = viewModel::saveChangesAndContinue,
+            onDiscard = viewModel::discardChangesAndContinue,
+            onContinueEditing = viewModel::continueEditing,
+        )
     }
 
     if (showSettingsPage) {
@@ -188,17 +219,45 @@ private fun ReadMDAppShell(
             state = state,
             snackbarHostState = snackbarHostState,
             onOpenSettings = { showSettingsPage = true },
-            onImport = { openDocumentLauncher.launch(Unit) },
-            onCreateNew = viewModel::newUnsavedDocument,
+            onImport = viewModel::requestImportDocument,
+            onCreateNew = viewModel::requestNewDocument,
             onSearchChange = viewModel::updateSearch,
-            onOpenRecent = viewModel::openRecentFile,
+            onOpenRecent = viewModel::requestOpenRecentFile,
             onClearRecents = viewModel::clearRecentFiles,
         )
     }
 }
 
 @Composable
-private fun ReadMDHomeScreen(
+private fun UnsavedChangesDialog(
+    onSave: () -> Unit,
+    onDiscard: () -> Unit,
+    onContinueEditing: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onContinueEditing,
+        title = { Text("有未保存修改") },
+        text = { Text("保存修改后再继续，或明确放弃本次修改。") },
+        confirmButton = {
+            Button(onClick = onSave) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onContinueEditing) {
+                    Text("继续编辑")
+                }
+                TextButton(onClick = onDiscard) {
+                    Text("放弃")
+                }
+            }
+        },
+    )
+}
+
+@Composable
+internal fun ReadMDHomeScreen(
     state: DocumentState,
     snackbarHostState: SnackbarHostState,
     onOpenSettings: () -> Unit,
@@ -211,10 +270,9 @@ private fun ReadMDHomeScreen(
     val elderMode = state.settings.elderMode
     val textScale = uiTextScale(elderMode, state.settings.fontScale)
     val spacing = uiSpacing(state.settings.lineHeightScale, elderMode)
+    val query = state.searchQuery.trim()
     val searchMatches = state.recentFiles.filter {
-        val query = state.searchQuery.trim()
-        query.isBlank() ||
-            it.displayName.contains(query, ignoreCase = true) ||
+        it.displayName.contains(query, ignoreCase = true) ||
             it.previewSnippet.contains(query, ignoreCase = true)
     }
 
@@ -282,43 +340,77 @@ private fun ReadMDHomeScreen(
                     )
                 }
             }
-            if (searchMatches.isNotEmpty()) {
-                items(searchMatches) { file ->
-                    RecentFileCard(
-                        file = file,
+            when {
+                state.isLoading -> item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+                query.isNotBlank() && searchMatches.isEmpty() -> item {
+                    EmptyHomeState(
                         elderMode = elderMode,
                         fontScale = state.settings.fontScale,
-                        onClick = { onOpenRecent(file.uri) },
+                        title = "未找到匹配笔记",
+                        description = "请尝试其他文件名或内容关键词。",
                     )
                 }
-            } else {
-                item {
-                    EmptyHomeState(elderMode = elderMode, fontScale = state.settings.fontScale)
-                }
-            }
-            if (state.recentFiles.isNotEmpty()) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                query.isNotBlank() -> {
+                    item {
                         Text(
-                            "最近笔记",
+                            "搜索结果",
                             fontSize = appTextSize(elderMode, state.settings.fontScale, 18.sp),
                             fontWeight = FontWeight.Medium,
                         )
-                        TextButton(onClick = onClearRecents) {
-                            Text("清空", fontSize = appTextSize(elderMode, state.settings.fontScale, 14.sp))
-                        }
+                    }
+                    items(searchMatches, key = { it.uri }) { file ->
+                        RecentFileCard(
+                            file = file,
+                            elderMode = elderMode,
+                            fontScale = state.settings.fontScale,
+                            onClick = { onOpenRecent(file.uri) },
+                        )
                     }
                 }
-                items(state.recentFiles) { file ->
-                    RecentFileCard(
-                        file = file,
+                state.recentFiles.isNotEmpty() -> {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "最近笔记",
+                                fontSize = appTextSize(elderMode, state.settings.fontScale, 18.sp),
+                                fontWeight = FontWeight.Medium,
+                            )
+                            TextButton(onClick = onClearRecents) {
+                                Text(
+                                    "清空",
+                                    fontSize = appTextSize(elderMode, state.settings.fontScale, 14.sp),
+                                )
+                            }
+                        }
+                    }
+                    items(state.recentFiles, key = { it.uri }) { file ->
+                        RecentFileCard(
+                            file = file,
+                            elderMode = elderMode,
+                            fontScale = state.settings.fontScale,
+                            onClick = { onOpenRecent(file.uri) },
+                        )
+                    }
+                }
+                else -> item {
+                    EmptyHomeState(
                         elderMode = elderMode,
                         fontScale = state.settings.fontScale,
-                        onClick = { onOpenRecent(file.uri) },
+                        title = "还没有备忘录",
+                        description = "点击“导入”打开 md 文件，或点击右下角加号创建本地备忘录。",
                     )
                 }
             }
@@ -491,7 +583,7 @@ private fun ReadingPositionBar(
     modifier: Modifier = Modifier,
 ) {
     var isActive by remember { mutableStateOf(false) }
-    var heightPx by remember { mutableStateOf(1) }
+    var heightPx by remember { mutableIntStateOf(1) }
     val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isActive) 0.42f else 0.22f)
     val thumbColor = MaterialTheme.colorScheme.primary.copy(alpha = if (isActive) 0.92f else 0.36f)
     val trackWidth = if (isActive) 10.dp else 3.dp
@@ -887,7 +979,12 @@ private fun RecentFileCard(
 }
 
 @Composable
-private fun EmptyHomeState(elderMode: Boolean, fontScale: Float) {
+private fun EmptyHomeState(
+    elderMode: Boolean,
+    fontScale: Float,
+    title: String,
+    description: String,
+) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(20.dp),
@@ -897,12 +994,12 @@ private fun EmptyHomeState(elderMode: Boolean, fontScale: Float) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                "还没有备忘录",
+                title,
                 fontSize = appTextSize(elderMode, fontScale, 18.sp),
                 fontWeight = FontWeight.Medium,
             )
             Text(
-                "点击“导入”打开 md 文件，或点击“新建”创建本地备忘录。",
+                description,
                 fontSize = appTextSize(elderMode, fontScale, 14.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -960,7 +1057,7 @@ private fun uiSpacing(lineHeightScale: Float, elderMode: Boolean): Dp {
     return base * lineHeightScale
 }
 
-private fun approximateTextOffsetForFraction(text: String, fraction: Float): Int {
+internal fun approximateTextOffsetForFraction(text: String, fraction: Float): Int {
     if (text.isBlank()) return 0
     val roughOffset = (text.length * fraction.coerceIn(0f, 1f)).roundToInt()
     if (roughOffset <= 0) return 0
