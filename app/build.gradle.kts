@@ -8,6 +8,17 @@ android {
     namespace = "com.andyxu.readmd"
     compileSdk = 36
 
+    val releaseSigningStoreFile = providers.environmentVariable("READMD_SIGNING_STORE_FILE").orNull
+    val releaseSigningStorePassword = providers.environmentVariable("READMD_SIGNING_STORE_PASSWORD").orNull
+    val releaseSigningKeyAlias = providers.environmentVariable("READMD_SIGNING_KEY_ALIAS").orNull
+    val releaseSigningKeyPassword = providers.environmentVariable("READMD_SIGNING_KEY_PASSWORD").orNull
+    val hasReleaseSigning = listOf(
+        releaseSigningStoreFile,
+        releaseSigningStorePassword,
+        releaseSigningKeyAlias,
+        releaseSigningKeyPassword,
+    ).all { !it.isNullOrBlank() }
+
     defaultConfig {
         applicationId = "com.andyxu.readmd"
         minSdk = 26
@@ -22,10 +33,24 @@ android {
         compose = true
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseSigningStoreFile!!)
+                storePassword = releaseSigningStorePassword
+                keyAlias = releaseSigningKeyAlias
+                keyPassword = releaseSigningKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

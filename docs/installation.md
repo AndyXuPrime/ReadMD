@@ -117,6 +117,22 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## 5. 常见问题
 
+### 5.0 VS Code 提示 Gradle 初始化脚本不存在
+
+如果 `build.gradle.kts` 顶部出现类似 `Could not run phased build action` 或 `specified initialization script ... redhat.java ... does not exist` 的提示，通常是 VS Code Java/Gradle 扩展缓存了旧的初始化脚本，不是项目脚本语法错误。
+
+项目已在 `.vscode/settings.json` 中固定使用 Gradle Wrapper，并关闭 Gradle Build Server。修改配置后请执行一次：
+
+1. `Developer: Reload Window`
+2. `Java: Clean Java Language Server Workspace`
+3. 重新打开项目根目录 `D:\ReadMD_proj\ReadMD`
+
+命令行仍可用下面的项目自带 Wrapper 验证构建：
+
+```powershell
+.\gradlew.bat :app:assembleDebug
+```
+
 ### 5.1 无法安装 APK
 
 可以检查：
@@ -162,10 +178,17 @@ D:\AndroidDevelop\AndroidSdk\cmdline-tools\latest\bin
 
 ## 6. 发布版本计划
 
+正式 Release 构建使用仓库外的签名证书。CI 通过以下 Secrets 注入签名信息，不把 `.jks` 文件、密码或私钥提交到仓库：
+
+- `READMD_RELEASE_KEYSTORE_BASE64`
+- `READMD_RELEASE_STORE_PASSWORD`
+- `READMD_RELEASE_KEY_ALIAS`
+- `READMD_RELEASE_KEY_PASSWORD`
+
+推送形如 `v0.1.0` 的版本标签后，GitHub Actions 会执行完整门禁、验证 APK 签名，并创建 GitHub 预发布版。
+
 后续可以增加：
 
-- 正式签名
-- GitHub Releases 自动上传 APK
 - 版本更新说明
 
 当前阶段先以 Debug APK 和手动安装为主。
